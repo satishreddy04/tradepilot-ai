@@ -29,43 +29,44 @@ def pick_40(rows,major):
     return chosen,len([x for x in chosen if x.get("ticker") in major])
 
 def sector_strength():
-    """Rank sectors for day trading using intraday leadership, trend and participation."""
+    """Rank sectors for day trading from the latest available regular session."""
     out=[]
     try:
         syms=list(SECTOR_ETFS.values())+["SPY"]
         z=yf.download(syms,period="5d",interval="5m",group_by="ticker",prepost=False,threads=True,progress=False,timeout=20)
-        spy=regular_session(z["SPY"].dropna())
-        if spy.empty: return out
-        sd=spy[spy.index.date==spy.index[-1].date]
+        def bars(sym):
+            try:
+                g=z[sym].dropna(how="all")
+                return regular_session(g)
+            except Exception as e:
+                print("sector bars",sym,e,flush=True); return pd.DataFrame()
+        spy=bars("SPY")
+        if spy.empty:
+            print("sector strength: SPY intraday empty",flush=True); return out
+        latest=spy.index[-1].date(); sd=spy[spy.index.date==latest]
         spy_ret=(float(sd.Close.iloc[-1])/float(sd.Open.iloc[0])-1)*100 if len(sd) else 0
         for name,t in SECTOR_ETFS.items():
-            g=regular_session(z[t].dropna())
+            g=bars(t)
             if g.empty: continue
-            td=g[g.index.date==g.index[-1].date].copy()
+            td=g[g.index.date==g.index[-1].date()].copy()
             if len(td)<3: continue
             close=td.Close.astype(float); vol=td.Volume.astype(float)
-            price=float(close.iloc[-1]); openp=float(td.Open.iloc[0])
-            ret=(price/openp-1)*100 if openp else 0
-            rs=ret-spy_ret
+            price=float(close.iloc[-1]); openp=float(td.Open.iloc[0]); ret=(price/openp-1)*100 if openp else 0; rs=ret-spy_ret
             e8=float(close.ewm(span=8,adjust=False).mean().iloc[-1]); e21=float(close.ewm(span=21,adjust=False).mean().iloc[-1])
-            typical=(td.High.astype(float)+td.Low.astype(float)+close)/3
-            vwap=float((typical*vol).cumsum().iloc[-1]/max(vol.cumsum().iloc[-1],1))
+            typical=(td.High.astype(float)+td.Low.astype(float)+close)/3; cv=float(vol.cumsum().iloc[-1]); vwap=float((typical*vol).cumsum().iloc[-1]/cv) if cv>0 else price
             above_vwap=price>vwap; ema_bull=price>e8>e21
-            avgbar=float(vol.iloc[:-1].tail(20).mean()) if len(vol)>1 else 0
-            rvol=float(vol.iloc[-1]/avgbar) if avgbar>0 else 0
-            # Day-trading score: leadership vs SPY is most important, then absolute move,
-            # VWAP/EMA trend and current participation. Score is comparable across sectors.
-            score=50 + max(-20,min(20,rs*8)) + max(-10,min(10,ret*3))
-            score += 8 if above_vwap else -8
-            score += 8 if ema_bull else -8
-            score += max(-4,min(4,(rvol-1)*4))
+            # Compare the latest bar with the same clock slot on prior sessions when possible.
+            slot=td.index[-1].strftime("%H:%M"); prior=g[(g.index.date<td.index[-1].date()) & (g.index.strftime("%H:%M")==slot)].Volume.tail(4)
+            base=float(prior.mean()) if len(prior) else float(vol.iloc[:-1].tail(20).mean())
+            rvol=float(vol.iloc[-1]/base) if base>0 else 0
+            score=50+max(-20,min(20,rs*8))+max(-10,min(10,ret*3))+(8 if above_vwap else -8)+(8 if ema_bull else -8)+max(-4,min(4,(rvol-1)*4))
             score=round(max(0,min(100,score)),1)
-            out.append({"sector":name,"etf":t,"intraday_pct":round(ret,2),"rs_vs_spy":round(rs,2),"above_vwap":above_vwap,"ema_bull":ema_bull,"rvol":round(rvol,2),"strength_score":score})
+            out.append({"sector":name,"etf":t,"session_date":str(td.index[-1].date()),"intraday_pct":round(ret,2),"rs_vs_spy":round(rs,2),"above_vwap":above_vwap,"ema_bull":ema_bull,"rvol":round(rvol,2),"strength_score":score})
         out.sort(key=lambda x:x["strength_score"],reverse=True)
         for n,x in enumerate(out):
-            x["rank"]=n+1
-            x["state"]="STRONG" if x["strength_score"]>=65 else ("WEAK" if x["strength_score"]<40 else "NEUTRAL")
-    except Exception as e: print("sector strength",e,flush=True)
+            x["rank"]=n+1; x["state"]="STRONG" if x["strength_score"]>=65 else ("WEAK" if x["strength_score"]<40 else "NEUTRAL")
+        print("sector strength rows",len(out),"session",str(latest),flush=True)
+    except Exception as e: print("sector strength",repr(e),flush=True)
     return out
 
 def load_universe():
