@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "worker.py"
+      - "worker.py"\n      - "spy_agents.py"
       - "universe.txt"
       - "app.py"
       - "requirements.txt"
