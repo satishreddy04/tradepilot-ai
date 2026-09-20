@@ -47,6 +47,9 @@ r2[1].metric("QQQ",m.get("qqq",{}).get("price","—"))
 r2[2].metric("Snapshot",short_time(s.get("generated_at")))
 
 st.markdown('<div class="card"><b>Overall Market: '+str(m.get("label","UNKNOWN"))+'</b><br><span class="muted">Rules-based SPY/QQQ EMA structure + watchlist breadth; not a forecast.</span></div>',unsafe_allow_html=True)
+scan=s.get("scanner",{})
+if scan:
+    st.markdown('<div class="card"><b>Dynamic Market Scanner</b><br><span class="muted">Scanned <b>'+str(scan.get("listed_symbols","—"))+'</b> U.S.-listed symbols → <b>'+str(scan.get("passed_filters","—"))+'</b> passed liquidity/momentum filters → <b>'+str(scan.get("intraday_scanned","—"))+'</b> received intraday analysis → Top <b>'+str(scan.get("day_displayed","—"))+'</b> Day / <b>'+str(scan.get("swing_displayed","—"))+'</b> Swing displayed.</span></div>',unsafe_allow_html=True)
 
 def setups(rows,title,day_mode=False):
     st.subheader(title)
@@ -66,11 +69,11 @@ def setups(rows,title,day_mode=False):
             if pd.notna(r.get(k)):fig.add_hline(y=float(r[k]),line_dash="dash",annotation_text=n)
         fig.update_layout(height=390,margin=dict(l=5,r=5,t=20,b=5),paper_bgcolor="#0d1b2d",plot_bgcolor="#0d1b2d",font_color="#cbd7e6",xaxis_rangeslider_visible=False)
         left.plotly_chart(fig,use_container_width=True)
-    risk=float(r.get("risk_share",0) or 0);shares=int(5/risk) if risk>0 else 0
+    risk=float(r.get("risk_share",0) or 0);risk_budget=15.0;shares_by_risk=int(risk_budget/risk) if risk>0 else 0;entry=float(r.get("entry",0) or 0);shares_by_cash=int(1500/entry) if entry>0 else 0;shares=min(shares_by_risk,shares_by_cash)
     extra=""
     if day_mode:
         extra="<br>VWAP: <b>$"+str(r.get("vwap","—"))+"</b><br>ORB H/L: <b>$"+str(r.get("orb_high","—"))+" / $"+str(r.get("orb_low","—"))+"</b>"
-    right.markdown('<div class="card"><b>'+str(r.ticker)+'</b> · <span class="status">'+str(r.get("status",""))+'</span><hr>Setup: <b>'+str(r.get("setup",""))+'</b><br>Score: <b>'+str(r.get("score",""))+'/100</b><br>RVOL: <b>'+str(r.get("rvol","—"))+'x</b>'+extra+'<hr>Entry: <b>$'+str(r.get("entry","—"))+'</b><br>Stop: <b>$'+str(r.get("stop","—"))+'</b><br>T1: <b>$'+str(r.get("t1","—"))+'</b><br>T2: <b>$'+str(r.get("t2","—"))+'</b><br>Risk/share: <b>$'+format(risk,'.2f')+'</b><br>Max shares @ $5 risk: <b>'+str(shares)+'</b></div>',unsafe_allow_html=True)
+    right.markdown('<div class="card"><b>'+str(r.ticker)+'</b> · <span class="status">'+str(r.get("status",""))+'</span><hr>Setup: <b>'+str(r.get("setup",""))+'</b><br>Score: <b>'+str(r.get("score",""))+'/100</b><br>RVOL: <b>'+str(r.get("rvol","—"))+'x</b>'+extra+'<hr>Entry: <b>$'+str(r.get("entry","—"))+'</b><br>Stop: <b>$'+str(r.get("stop","—"))+'</b><br>T1: <b>$'+str(r.get("t1","—"))+'</b><br>T2: <b>$'+str(r.get("t2","—"))+'</b><br>Risk/share: <b>$'+format(risk,'.2f')+'</b><br>Max shares @ $15 risk / $1,500 cash: <b>'+str(shares)+'</b></div>',unsafe_allow_html=True)
 
 day,swing,analytics,backtest,news=st.tabs(["⚡ Day Trades","📆 Swing Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
 with day:setups(s.get("day",[]),"Top Day Trade Setups",True)
