@@ -1,15 +1,11 @@
 # TradePilot AI
 
-Mobile-friendly day/swing trading dashboard with scanner, alerts, risk sizing, manual controls and paper-auto execution hooks.
+Mobile-friendly Yahoo/yfinance market dashboard for personal testing.
 
-## Run
-1. python -m venv .venv
-2. Activate it
-3. pip install -r requirements.txt
-4. streamlit run app.py
+Features: overall bullish/bearish/neutral market regime, Top Day and Swing setups, entry/stop/T1/T2, $5-risk sizing, candlestick inspection, snapshot analytics, Yahoo news/catalysts, optional Telegram confirmed-setup alerts, and GitHub Actions refresh.
 
-## Deploy
-Deploy this repository on Streamlit Community Cloud and set app.py as the entry file. Add broker/Telegram credentials only through deployment secrets.
+Run: `pip install -r requirements.txt`, `python worker.py`, then `streamlit run app.py`.
 
-## V1 safety
-Live-money AUTO execution is intentionally disabled. Validate the scanner and Alpaca paper execution first.
+Telegram: add repository Actions secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`; never commit secrets.
+
+Data note: yfinance is unofficial and Yahoo data may be delayed, throttled or unavailable. Confirm actionable prices with your broker. Market regime/scores are rules-based indicators, not forecasts.
