@@ -11,23 +11,8 @@ MAJOR_FALLBACK={"AAPL","MSFT","NVDA","AMZN","META","GOOGL","GOOG","AVGO","TSLA",
 SECTOR_ETFS={"Technology":"XLK","Financials":"XLF","Communication":"XLC","Consumer Discretionary":"XLY","Industrials":"XLI","Health Care":"XLV","Energy":"XLE","Consumer Staples":"XLP","Utilities":"XLU","Real Estate":"XLRE","Materials":"XLB"}
 
 def load_major_index_members():
-    """S&P 500 + Nasdaq-100 + Dow members, with a liquid large-cap fallback."""
-    out=set(MAJOR_FALLBACK)
-    try:
-        tables=pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
-        out.update(tables[0]["Symbol"].astype(str).str.replace(".","-",regex=False))
-    except Exception as e: print("sp500 members",e)
-    try:
-        for tb in pd.read_html("https://en.wikipedia.org/wiki/Nasdaq-100"):
-            col=next((x for x in ("Ticker","Symbol") if x in tb.columns),None)
-            if col and len(tb)>=80: out.update(tb[col].astype(str).str.replace(".","-",regex=False)); break
-    except Exception as e: print("nasdaq100 members",e)
-    try:
-        for tb in pd.read_html("https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"):
-            col=next((x for x in ("Symbol","Ticker") if x in tb.columns),None)
-            if col and 25<=len(tb)<=40: out.update(tb[col].astype(str).str.replace(".","-",regex=False)); break
-    except Exception as e: print("dow members",e)
-    return {x.strip().upper() for x in out if isinstance(x,str) and x.strip()}
+    """Fast, deterministic liquid large-cap index core; avoids network HTML scraping in each scan."""
+    return set(MAJOR_FALLBACK)
 
 def pick_40(rows,major):
     ranked=sorted(rows,key=lambda x:(x.get("score",0),x.get("rvol") or 0),reverse=True)
@@ -255,10 +240,10 @@ def main():
     global U
     broad=load_universe()
     major=load_major_index_members()
-    candidates=discover_candidates(broad,100)
-    # Run the same cheap daily prefilter over major-index members, then only request
-    # intraday bars for the best qualifying names. This keeps the 5-minute job bounded.
-    major_candidates=discover_candidates(sorted(major),60)
+    # Bound discovery work so snapshots finish reliably on GitHub-hosted runners.
+    # The broad universe remains dynamic, while the liquid major-index core is always included.
+    candidates=discover_candidates(broad,80)
+    major_candidates=list(major)
     U=["SPY","QQQ"]+list(dict.fromkeys([x for x in major_candidates if x not in ("SPY","QQQ")]+[x for x in candidates if x not in ("SPY","QQQ")]))
     print("dynamic discovery:",len(broad),"listed ->",len(candidates),"broad +",len(major_candidates),"major candidates")
     d=yf.download(U,period="4mo",interval="1d",group_by="ticker",threads=True,progress=False)
