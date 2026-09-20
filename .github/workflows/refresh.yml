@@ -1,6 +1,13 @@
 name: Refresh TradePilot snapshot
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "worker.py"
+      - "app.py"
+      - "requirements.txt"
+      - ".github/workflows/refresh.yml"
   schedule:
     - cron: "15 11 * * 1-5"
     - cron: "30,45 12 * * 1-5"
