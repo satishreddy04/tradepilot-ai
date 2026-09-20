@@ -75,9 +75,28 @@ def setups(rows,title,day_mode=False):
         extra="<br>VWAP: <b>$"+str(r.get("vwap","—"))+"</b><br>ORB H/L: <b>$"+str(r.get("orb_high","—"))+" / $"+str(r.get("orb_low","—"))+"</b>"
     right.markdown('<div class="card"><b>'+str(r.ticker)+'</b> · <span class="status">'+str(r.get("status",""))+'</span><hr>Setup: <b>'+str(r.get("setup",""))+'</b><br>Score: <b>'+str(r.get("score",""))+'/100</b><br>RVOL: <b>'+str(r.get("rvol","—"))+'x</b>'+extra+'<hr>Entry: <b>$'+str(r.get("entry","—"))+'</b><br>Stop: <b>$'+str(r.get("stop","—"))+'</b><br>T1: <b>$'+str(r.get("t1","—"))+'</b><br>T2: <b>$'+str(r.get("t2","—"))+'</b><br>Risk/share: <b>$'+format(risk,'.2f')+'</b><br>Max shares @ $15 risk / $1,500 cash: <b>'+str(shares)+'</b></div>',unsafe_allow_html=True)
 
-day,swing,analytics,backtest,news=st.tabs(["⚡ Day Trades","📆 Swing Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
+day,swing,paper,analytics,backtest,news=st.tabs(["⚡ Day Trades","📆 Swing Trades","📝 Paper Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
 with day:setups(s.get("day",[]),"Top Day Trade Setups",True)
 with swing:setups(s.get("swing",[]),"Top Swing Trade Setups")
+with paper:
+    st.subheader("Paper Trade Journal")
+    jp=Path("docs/data/journal.json")
+    try: journal=pd.DataFrame(json.loads(jp.read_text())) if jp.exists() else pd.DataFrame()
+    except: journal=pd.DataFrame()
+    if journal.empty:
+        st.info("No paper trades yet. A simulated trade will be created when a Day setup becomes CONFIRMED.")
+    else:
+        closed=journal[journal["status"]=="CLOSED"] if "status" in journal.columns else pd.DataFrame()
+        openj=journal[journal["status"]=="OPEN"] if "status" in journal.columns else pd.DataFrame()
+        pnl=float(closed["pnl"].sum()) if not closed.empty and "pnl" in closed.columns else 0
+        wins=int((closed["pnl"]>0).sum()) if not closed.empty and "pnl" in closed.columns else 0
+        wr=round(100*wins/len(closed),1) if len(closed) else 0
+        pc=st.columns(4)
+        pc[0].metric("Total Signals",len(journal));pc[1].metric("Open",len(openj));pc[2].metric("Paper P&L",f"$"+format(pnl,",.2f"));pc[3].metric("Win Rate",f"{wr}%")
+        st.caption("Simulation only — no broker orders are placed. Entries are created from new CONFIRMED day signals.")
+        wanted=[x for x in ["opened_at","ticker","setup","entry","stop","t1","t2","shares","planned_risk","status","t1_hit","outcome","exit","pnl","closed_at"] if x in journal.columns]
+        st.dataframe(journal[wanted].iloc[::-1],use_container_width=True,hide_index=True,height=520)
+
 with analytics:
     a=s.get("analytics",{})
     cc=st.columns(2)
