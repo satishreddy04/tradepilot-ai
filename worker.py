@@ -41,6 +41,7 @@ def discover_candidates(symbols):
 U=[]
 OUT=Path("docs/data/snapshot.json")
 STATE=Path("docs/data/state.json")
+JOURNAL=Path("docs/data/journal.json")
 
 def num(x):
     try:return None if pd.isna(x) else round(float(x),2)
@@ -168,6 +169,31 @@ def main():
     m=regime(d)
     snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"day_displayed":len(day),"swing_displayed":len(swing),"dynamic":True},"market":m,"day":day,"swing":swing,"news":news(),"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
     OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(snap,separators=(",",":")))
+    # Paper journal: open a simulated trade on a new CONFIRMED day signal and track stop/T1/T2.
+    try: journal=json.loads(JOURNAL.read_text()) if JOURNAL.exists() else []
+    except: journal=[]
+    now=datetime.now(timezone.utc).isoformat(timespec="seconds")
+    open_by_ticker={x["ticker"]:x for x in journal if x.get("kind")=="DAY" and x.get("status")=="OPEN"}
+    day_map={x["ticker"]:x for x in day}
+    for ticker,tr in list(open_by_ticker.items()):
+        x=day_map.get(ticker)
+        if not x: continue
+        price=float(x.get("price") or 0); stop=float(tr["stop"]); t1=float(tr["t1"]); t2=float(tr["t2"])
+        if price<=stop: tr.update(status="CLOSED",exit=price,outcome="STOP",closed_at=now,pnl=round((price-tr["entry"])*tr["shares"],2))
+        elif price>=t2: tr.update(status="CLOSED",exit=price,outcome="T2",closed_at=now,pnl=round((price-tr["entry"])*tr["shares"],2))
+        elif price>=t1 and not tr.get("t1_hit"): tr["t1_hit"]=True; tr["t1_hit_at"]=now
+    try: previous_for_journal=json.loads(STATE.read_text()) if STATE.exists() else {}
+    except: previous_for_journal={}
+    for x in day:
+        key="DAY:"+x["ticker"]
+        if x["status"]=="CONFIRMED" and previous_for_journal.get(key,"WATCH")!="CONFIRMED" and x["ticker"] not in open_by_ticker:
+            entry=float(x.get("price") or x.get("entry") or 0); stop=float(x.get("stop") or 0); risk=max(.01,entry-stop)
+            shares=min(int(15/risk),int(1500/entry)) if entry>0 else 0
+            if shares>0:
+                journal.append({"kind":"DAY","ticker":x["ticker"],"setup":x.get("setup"),"opened_at":now,"entry":round(entry,2),"stop":stop,"t1":float(x["t1"]),"t2":float(x["t2"]),"shares":shares,"planned_risk":round((entry-stop)*shares,2),"status":"OPEN","t1_hit":False,"score":x.get("score"),"rvol":x.get("rvol")})
+    JOURNAL.parent.mkdir(parents=True,exist_ok=True)
+    JOURNAL.write_text(json.dumps(journal[-500:],separators=(",",":")))
+
     # Persist setup states so Telegram only fires on meaningful transitions.
     try: previous=json.loads(STATE.read_text()) if STATE.exists() else {}
     except: previous={}
