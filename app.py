@@ -68,7 +68,7 @@ def setups(rows,title,day_mode=False):
     if not rows:
         st.info("Waiting for the next market-data snapshot.");return
     df=pd.DataFrame(rows)
-    cols=[x for x in ["ticker","price","score","rvol","setup","status","entry","stop","t1","t2","risk_share"] if x in df]
+    cols=[x for x in ["ticker","universe","price","score","rvol","setup","status","entry","stop","t1","t2","risk_share"] if x in df]
     view=df[cols].copy()
     def status_style(row):
         status=str(row.get("status","")).upper()
