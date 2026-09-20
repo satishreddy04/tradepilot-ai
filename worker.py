@@ -69,7 +69,7 @@ def load_universe():
     except Exception as e: print("universe discovery",e)
     return [x.strip().upper() for x in UNIVERSE_FILE.read_text().splitlines() if x.strip() and not x.startswith("#")]
 
-def discover_candidates(symbols):
+def discover_candidates(symbols, limit=100):
     keep=[]
     for start in range(0,len(symbols),150):
         batch=symbols[start:start+150]
@@ -85,7 +85,7 @@ def discover_candidates(symbols):
                 if p>=3 and av>=500000 and dollar>=15000000 and adr>=2 and p>e8>e21>e50: keep.append((t,momentum,adr,dollar))
             except Exception: pass
     keep.sort(key=lambda z:(z[1],z[2],z[3]),reverse=True)
-    return [x[0] for x in keep[:100]]
+    return [x[0] for x in keep[:limit]]
 
 U=[]
 OUT=Path("docs/data/snapshot.json")
@@ -255,12 +255,12 @@ def main():
     global U
     broad=load_universe()
     major=load_major_index_members()
-    candidates=discover_candidates(broad)
-    # Cap the major-index supplement so Yahoo runs remain practical. Major names are
-    # included even when they miss the broad bullish prefilter; setup rules still decide display.
-    major_scan=sorted(major)[:550]
-    U=["SPY","QQQ"]+list(dict.fromkeys([x for x in candidates if x not in ("SPY","QQQ")]+[x for x in major_scan if x not in ("SPY","QQQ")]))
-    print("dynamic discovery:",len(broad),"listed ->",len(candidates),"intraday candidates")
+    candidates=discover_candidates(broad,100)
+    # Run the same cheap daily prefilter over major-index members, then only request
+    # intraday bars for the best qualifying names. This keeps the 5-minute job bounded.
+    major_candidates=discover_candidates(sorted(major),60)
+    U=["SPY","QQQ"]+list(dict.fromkeys([x for x in major_candidates if x not in ("SPY","QQQ")]+[x for x in candidates if x not in ("SPY","QQQ")]))
+    print("dynamic discovery:",len(broad),"listed ->",len(candidates),"broad +",len(major_candidates),"major candidates")
     d=yf.download(U,period="4mo",interval="1d",group_by="ticker",threads=True,progress=False)
     # prepost=False prevents extended-hours prints from contaminating ORB/VWAP/RVOL.
     i=yf.download(U,period="5d",interval="5m",group_by="ticker",prepost=False,threads=True,progress=False)
