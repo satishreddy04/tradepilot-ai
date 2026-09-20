@@ -61,17 +61,21 @@ if sectors:
     st.caption("Day-trading strength combines performance since the open, relative strength vs SPY, VWAP, EMA8/21 trend and intraday volume participation. It is context, not a buy signal.")
 
 swing_secs=s.get("swing_sectors",[])
+st.subheader("📈 Swing Trading Sector Strength (5D / 20D)")
 if swing_secs:
-    st.subheader("📈 Swing Trading Sector Strength")
-    ssdf=pd.DataFrame(swing_secs)
-    fig=px.bar(ssdf.sort_values("strength_score"),x="strength_score",y="sector",orientation="h",text="state",hover_data=["etf","week_pct","month_pct","rs20_vs_spy","ema_trend"])
-    fig.update_layout(height=390,margin=dict(l=10,r=10,t=10,b=10),xaxis_title="Swing Strength Score",yaxis_title="")
+    ssdf=pd.DataFrame(swing_secs).sort_values("strength_score",ascending=True)
+    fig=px.bar(ssdf,x="strength_score",y="sector",orientation="h",text="strength_score",hover_data=["etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend"])
+    fig.update_traces(textposition="outside")
+    fig.update_layout(height=430,margin=dict(l=10,r=35,t=10,b=10),xaxis_title="Swing Strength Score",yaxis_title="",showlegend=False)
     st.plotly_chart(fig,use_container_width=True)
-    st.dataframe(ssdf[[x for x in ["rank","sector","etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend","strength_score"] if x in ssdf]],use_container_width=True,hide_index=True)
+    with st.expander("View all 11 swing sectors"):
+        st.dataframe(ssdf.sort_values("strength_score",ascending=False)[[x for x in ["rank","sector","etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend","strength_score"] if x in ssdf]],use_container_width=True,hide_index=True)
     st.caption("Swing strength combines 5-day and 20-day momentum, 20-day relative strength versus SPY and EMA8/21/50 trend structure.")
+else:
+    st.info("Swing sector data is waiting for the next successful scanner snapshot. Day-trading data remains available.")
 scan=s.get("scanner",{})
 if scan:
-    st.markdown('<div class="card"><b>Dynamic Market Scanner</b><br><span class="muted">Scanned <b>'+str(scan.get("listed_symbols","—"))+'</b> U.S.-listed symbols → <b>'+str(scan.get("passed_filters","—"))+'</b> passed liquidity/momentum filters → <b>'+str(scan.get("intraday_scanned","—"))+'</b> received intraday analysis → Top <b>'+str(scan.get("day_displayed","—"))+'</b> Day / <b>'+str(scan.get("swing_displayed","—"))+'</b> Swing displayed. Major-index setups: Day <b>'+str(scan.get("day_major_index","—"))+'</b>, Swing <b>'+str(scan.get("swing_major_index","—"))+'</b> (target up to 30 each).</span></div>',unsafe_allow_html=True)
+    st.markdown('<div class="card"><b>Dynamic Market Scanner</b><br><span class="muted">Scanned <b>'+str(scan.get("listed_symbols","—"))+'</b> U.S.-listed symbols → <b>'+str(scan.get("passed_filters","—"))+'</b> passed liquidity/momentum filters → <b>'+str(scan.get("intraday_scanned","—"))+'</b> received intraday analysis → Top <b>'+str(scan.get("day_displayed","—"))+'</b> Day / <b>'+str(scan.get("swing_displayed","—"))+'</b> Swing displayed. Major-index setups: Day <b>'+str(scan.get("day_major_index","—"))+'</b>, Swing <b>'+str(scan.get("swing_major_index","—"))+'</b> (target 25 Major Index + 25 Broader Market each; shortages are filled only by qualified setups).</span></div>',unsafe_allow_html=True)
 
 def setups(rows,title,day_mode=False):
     st.subheader(title)
