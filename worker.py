@@ -5,7 +5,40 @@ import pandas as pd
 import yfinance as yf
 import requests
 
-UNIVERSE_FILE=Path("universe.txt")\nU=[x.strip().upper() for x in UNIVERSE_FILE.read_text().splitlines() if x.strip() and not x.startswith("#")]\nfor benchmark in ("SPY","QQQ"):\n    if benchmark not in U: U.insert(0,benchmark)
+UNIVERSE_FILE=Path("universe.txt")
+
+def load_universe():
+    symbols=[]
+    try:
+        for url in ("https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt","https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt"):
+            x=pd.read_csv(url,sep="|")
+            col="Symbol" if "Symbol" in x.columns else "ACT Symbol"
+            symbols.extend(x[col].dropna().astype(str).tolist())
+        symbols=[s.strip().upper().replace(".","-") for s in symbols]
+        symbols=[s for s in dict.fromkeys(symbols) if s and s.isascii() and "^" not in s and "$" not in s and len(s)<=6 and not s.startswith("File Creation")]
+        if len(symbols)>=1000:return symbols
+    except Exception as e: print("universe discovery",e)
+    return [x.strip().upper() for x in UNIVERSE_FILE.read_text().splitlines() if x.strip() and not x.startswith("#")]
+
+def discover_candidates(symbols):
+    keep=[]
+    for start in range(0,len(symbols),150):
+        batch=symbols[start:start+150]
+        try: d=yf.download(batch,period="3mo",interval="1d",group_by="ticker",threads=True,progress=False,timeout=25)
+        except Exception as e: print("discovery batch",start,e); continue
+        for t in batch:
+            try:
+                g=(d[t] if len(batch)>1 else d).dropna()
+                if len(g)<50: continue
+                close=g.Close; vol=g.Volume; p=float(close.iloc[-1]); av=float(vol.tail(20).mean()); dollar=p*av
+                e8=float(close.ewm(span=8,adjust=False).mean().iloc[-1]); e21=float(close.ewm(span=21,adjust=False).mean().iloc[-1]); e50=float(close.ewm(span=50,adjust=False).mean().iloc[-1])
+                adr=float((((g.High-g.Low)/close)*100).tail(20).mean()); momentum=(p/e21-1) if e21 else 0
+                if p>=3 and av>=500000 and dollar>=15000000 and adr>=2 and p>e8>e21>e50: keep.append((t,momentum,adr,dollar))
+            except Exception: pass
+    keep.sort(key=lambda z:(z[1],z[2],z[3]),reverse=True)
+    return [x[0] for x in keep[:100]]
+
+U=[]
 OUT=Path("docs/data/snapshot.json")
 
 def num(x):
@@ -111,6 +144,11 @@ def news():
     return out[:20]
 
 def main():
+    global U
+    broad=load_universe()
+    candidates=discover_candidates(broad)
+    U=["SPY","QQQ"]+[x for x in candidates if x not in ("SPY","QQQ")]
+    print("dynamic discovery:",len(broad),"listed ->",len(candidates),"intraday candidates")
     d=yf.download(U,period="4mo",interval="1d",group_by="ticker",threads=True,progress=False)
     # prepost=False prevents extended-hours prints from contaminating ORB/VWAP/RVOL.
     i=yf.download(U,period="5d",interval="5m",group_by="ticker",prepost=False,threads=True,progress=False)
