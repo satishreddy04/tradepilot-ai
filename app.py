@@ -50,15 +50,15 @@ st.markdown('<div class="card"><b>Overall Market: '+str(m.get("label","UNKNOWN")
 
 sectors=s.get("sectors",[])
 if sectors:
-    st.subheader("🔥 Sector Strength — Latest Available Session")
+    st.subheader("🔥 Day Trading Sector Strength")
     sc=st.columns(min(4,len(sectors)))
     for n,x in enumerate(sectors[:4]):
-        sc[n].metric("#"+str(x.get("rank",""))+" "+str(x.get("sector","")),str(x.get("state","")),delta=str(x.get("day_pct","—"))+"% day")
+        sc[n].metric("#"+str(x.get("rank",""))+" "+str(x.get("sector","")),str(x.get("state","")),delta=str(x.get("intraday_pct","—"))+"% since open")
     with st.expander("View all 11 sectors"):
         sdf=pd.DataFrame(sectors)
-        show=[x for x in ["rank","sector","etf","state","day_pct","week_pct","rs_vs_spy","strength_score"] if x in sdf]
+        show=[x for x in ["rank","sector","etf","state","intraday_pct","rs_vs_spy","above_vwap","ema_bull","rvol","strength_score"] if x in sdf]
         st.dataframe(sdf[show],use_container_width=True,hide_index=True)
-    st.caption("Strength combines sector ETF daily/5-day performance and 5-day relative strength versus SPY. It is context, not a buy signal.")
+    st.caption("Day-trading strength combines performance since the open, relative strength vs SPY, VWAP, EMA8/21 trend and intraday volume participation. It is context, not a buy signal.")
 scan=s.get("scanner",{})
 if scan:
     st.markdown('<div class="card"><b>Dynamic Market Scanner</b><br><span class="muted">Scanned <b>'+str(scan.get("listed_symbols","—"))+'</b> U.S.-listed symbols → <b>'+str(scan.get("passed_filters","—"))+'</b> passed liquidity/momentum filters → <b>'+str(scan.get("intraday_scanned","—"))+'</b> received intraday analysis → Top <b>'+str(scan.get("day_displayed","—"))+'</b> Day / <b>'+str(scan.get("swing_displayed","—"))+'</b> Swing displayed. Major-index setups: Day <b>'+str(scan.get("day_major_index","—"))+'</b>, Swing <b>'+str(scan.get("swing_major_index","—"))+'</b> (target up to 30 each).</span></div>',unsafe_allow_html=True)
