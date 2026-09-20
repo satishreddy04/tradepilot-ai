@@ -36,12 +36,11 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
-      - run: python backtest.py
-        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+      # Backtesting is intentionally separate from the frequent dashboard refresh.
       - run: |
           git config user.name tradepilot-bot
           git config user.email tradepilot-bot@users.noreply.github.com
-          git add docs/data/snapshot.json docs/data/backtest.json docs/data/state.json docs/data/journal.json
+          git add docs/data/snapshot.json docs/data/state.json docs/data/journal.json
           git diff --cached --quiet || git commit -m 'data: refresh snapshot and backtest'
           # A code/UI push can land while this scanner run is executing.
           # Rebase the generated-data commit onto the latest main before pushing.
