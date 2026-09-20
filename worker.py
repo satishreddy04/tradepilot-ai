@@ -168,7 +168,17 @@ def main():
     day=sorted(day,key=lambda x:(x["score"],x["rvol"] or 0),reverse=True)[:25]
     swing=sorted(swing,key=lambda x:(x["score"],x["rvol"] or 0),reverse=True)[:25]
     m=regime(d)
-    try: spy_ai=build_spy_agents(d["SPY"],regular_session(i["SPY"]),[x for x in news() if x.get("ticker")=="SPY"])\n    except Exception as e: print("spy agents",e); spy_ai={}\n    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"day_displayed":len(day),"swing_displayed":len(swing),"dynamic":True},"market":m,"day":day,"swing":swing,"news":news(),"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
+    news_items=news()
+    try:
+        spy_daily=d["SPY"].dropna()
+        spy_intraday=regular_session(i["SPY"]).dropna()
+        spy_ai=build_spy_agents(spy_daily,spy_intraday,[x for x in news_items if x.get("ticker")=="SPY"])
+        if spy_ai:
+            spy_ai["data_asof"]=str(spy_intraday.index[-1]) if len(spy_intraday) else None
+            spy_ai["market_data_status"]="LATEST AVAILABLE SESSION"
+    except Exception as e:
+        print("spy agents",e); spy_ai={"error":str(e)[:180],"market_data_status":"UNAVAILABLE"}
+    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"day_displayed":len(day),"swing_displayed":len(swing),"dynamic":True},"market":m,"day":day,"swing":swing,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
     OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(snap,separators=(",",":")))
     # Paper journal: open a simulated trade on a new CONFIRMED day signal and track stop/T1/T2.
     try: journal=json.loads(JOURNAL.read_text()) if JOURNAL.exists() else []
