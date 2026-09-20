@@ -15,6 +15,9 @@ on:
     - cron: "15 11 * * 1-5"
     - cron: "30,45 12 * * 1-5"
     - cron: "0,5,10,15,20,25,30,35,40,45,50,55 13-20 * * 1-5"
+concurrency:
+  group: tradepilot-refresh
+  cancel-in-progress: true
 permissions:
   contents: write
 jobs:
@@ -34,6 +37,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
       - run: python backtest.py
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
       - run: |
           git config user.name tradepilot-bot
           git config user.email tradepilot-bot@users.noreply.github.com
