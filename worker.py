@@ -240,12 +240,13 @@ def main():
     global U
     broad=load_universe()
     major=load_major_index_members()
-    # Bound discovery work so snapshots finish reliably on GitHub-hosted runners.
-    # The broad universe remains dynamic, while the liquid major-index core is always included.
-    candidates=discover_candidates(broad,80)
+    # Fast refresh path: use the liquid major-index core plus the repo fallback universe.
+    # Full-market discovery is intentionally kept out of the 5-minute snapshot job.
+    fallback=[x.strip().upper() for x in UNIVERSE_FILE.read_text().splitlines() if x.strip() and not x.startswith("#")]
+    candidates=list(dict.fromkeys(fallback))[:80]
     major_candidates=list(major)
     U=["SPY","QQQ"]+list(dict.fromkeys([x for x in major_candidates if x not in ("SPY","QQQ")]+[x for x in candidates if x not in ("SPY","QQQ")]))
-    print("dynamic discovery:",len(broad),"listed ->",len(candidates),"broad +",len(major_candidates),"major candidates")
+    print("fast snapshot:",len(candidates),"fallback +",len(major_candidates),"major candidates; listed universe",len(broad))
     d=yf.download(U,period="4mo",interval="1d",group_by="ticker",threads=True,progress=False)
     # prepost=False prevents extended-hours prints from contaminating ORB/VWAP/RVOL.
     i=yf.download(U,period="5d",interval="5m",group_by="ticker",prepost=False,threads=True,progress=False)
@@ -280,7 +281,7 @@ def main():
             spy_ai["market_data_status"]="LATEST AVAILABLE SESSION"
     except Exception as e:
         print("spy agents",e); spy_ai={"error":str(e)[:180],"market_data_status":"UNAVAILABLE"}
-    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"day_displayed":len(day),"swing_displayed":len(swing),"day_major_index":day_major_count,"swing_major_index":swing_major_count,"target_major_index":30,"dynamic":True},"market":m,"sectors":sectors,"day":day,"swing":swing,"quality":quality,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
+    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"scan_mode":"FAST SNAPSHOT","day_displayed":len(day),"swing_displayed":len(swing),"day_major_index":day_major_count,"swing_major_index":swing_major_count,"target_major_index":30,"dynamic":True},"market":m,"sectors":sectors,"day":day,"swing":swing,"quality":quality,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
     OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(snap,separators=(",",":")))
     # Paper journal: open a simulated trade on a new CONFIRMED day signal and track stop/T1/T2.
     try: journal=json.loads(JOURNAL.read_text()) if JOURNAL.exists() else []
