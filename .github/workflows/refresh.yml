@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "worker.py"
+      - "universe.txt"
       - "app.py"
       - "requirements.txt"
       - "backtest.py"
