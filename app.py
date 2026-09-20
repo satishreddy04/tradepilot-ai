@@ -131,6 +131,12 @@ with spyopt:
             q1,q2,q3,q4=st.columns(4)
             q1.metric("Contract",f"{oc.get('type')} {oc.get('strike')}");q2.metric("Expiration",oc.get("expiration","—"));q3.metric("Ask",f"$"+str(oc.get("ask","—")));q4.metric("Max Debit",f"$"+str(oc.get("max_debit","—")))
             st.write(f"DTE: {oc.get('dte')} · Bid/Mid/Ask: {oc.get('bid')} / {oc.get('mid')} / {oc.get('ask')} · Spread: {oc.get('spread_pct')}% · IV: {oc.get('iv_pct')}% · Volume: {oc.get('volume')} · OI: {oc.get('open_interest')}")
+        elif opt.get("spread"):
+            sp=opt["spread"]
+            q1,q2,q3,q4=st.columns(4)
+            q1.metric("Strategy",sp.get("type","Debit Spread"));q2.metric("Expiration",sp.get("expiration","—"));q3.metric("Buy / Sell",f"{sp.get('buy_strike')} / {sp.get('sell_strike')}");q4.metric("Est. Debit",f"${sp.get('estimated_debit','—')}")
+            st.write(f"Width: ${sp.get('width','—')} · Max loss: ${sp.get('max_loss','—')} · Max profit at expiration: ${sp.get('max_profit','—')}")
+            st.warning("Estimated from separate option-leg quotes; verify the live spread bid/ask with your broker before any trade.")
         else:
             st.warning(opt.get("reason","No options candidate while direction is WAIT."))
         st.caption(opt.get("source","Options-chain data must be verified with your broker."))
