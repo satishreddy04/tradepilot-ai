@@ -23,23 +23,44 @@ def pick_40(rows,major):
     return chosen[:40],len(major_rows)
 
 def sector_strength():
+    """Rank sectors for day trading using intraday leadership, trend and participation."""
     out=[]
     try:
         syms=list(SECTOR_ETFS.values())+["SPY"]
-        z=yf.download(syms,period="1mo",interval="1d",group_by="ticker",threads=True,progress=False)
-        spy=z["SPY"].dropna(); spy5=(float(spy.Close.iloc[-1])/float(spy.Close.iloc[-6])-1)*100 if len(spy)>=6 else 0
+        z=yf.download(syms,period="5d",interval="5m",group_by="ticker",prepost=False,threads=True,progress=False,timeout=20)
+        spy=regular_session(z["SPY"].dropna())
+        if spy.empty: return out
+        sd=spy[spy.index.date==spy.index[-1].date]
+        spy_ret=(float(sd.Close.iloc[-1])/float(sd.Open.iloc[0])-1)*100 if len(sd) else 0
         for name,t in SECTOR_ETFS.items():
-            g=z[t].dropna()
-            if len(g)<6: continue
-            d1=(float(g.Close.iloc[-1])/float(g.Close.iloc[-2])-1)*100
-            d5=(float(g.Close.iloc[-1])/float(g.Close.iloc[-6])-1)*100
-            rs=d5-spy5; score=round(d1*.35+d5*.35+rs*.30,2)
-            out.append({"sector":name,"etf":t,"day_pct":round(d1,2),"week_pct":round(d5,2),"rs_vs_spy":round(rs,2),"strength_score":score})
+            g=regular_session(z[t].dropna())
+            if g.empty: continue
+            td=g[g.index.date==g.index[-1].date].copy()
+            if len(td)<3: continue
+            close=td.Close.astype(float); vol=td.Volume.astype(float)
+            price=float(close.iloc[-1]); openp=float(td.Open.iloc[0])
+            ret=(price/openp-1)*100 if openp else 0
+            rs=ret-spy_ret
+            e8=float(close.ewm(span=8,adjust=False).mean().iloc[-1]); e21=float(close.ewm(span=21,adjust=False).mean().iloc[-1])
+            typical=(td.High.astype(float)+td.Low.astype(float)+close)/3
+            vwap=float((typical*vol).cumsum().iloc[-1]/max(vol.cumsum().iloc[-1],1))
+            above_vwap=price>vwap; ema_bull=price>e8>e21
+            avgbar=float(vol.iloc[:-1].tail(20).mean()) if len(vol)>1 else 0
+            rvol=float(vol.iloc[-1]/avgbar) if avgbar>0 else 0
+            # Day-trading score: leadership vs SPY is most important, then absolute move,
+            # VWAP/EMA trend and current participation. Score is comparable across sectors.
+            score=50 + max(-20,min(20,rs*8)) + max(-10,min(10,ret*3))
+            score += 8 if above_vwap else -8
+            score += 8 if ema_bull else -8
+            score += max(-4,min(4,(rvol-1)*4))
+            score=round(max(0,min(100,score)),1)
+            out.append({"sector":name,"etf":t,"intraday_pct":round(ret,2),"rs_vs_spy":round(rs,2),"above_vwap":above_vwap,"ema_bull":ema_bull,"rvol":round(rvol,2),"strength_score":score})
         out.sort(key=lambda x:x["strength_score"],reverse=True)
-        for n,x in enumerate(out): x["rank"]=n+1;x["state"]="STRONG" if n<3 else ("WEAK" if n>=len(out)-3 else "NEUTRAL")
-    except Exception as e: print("sector strength",e)
+        for n,x in enumerate(out):
+            x["rank"]=n+1
+            x["state"]="STRONG" if x["strength_score"]>=65 else ("WEAK" if x["strength_score"]<40 else "NEUTRAL")
+    except Exception as e: print("sector strength",e,flush=True)
     return out
-
 
 def load_universe():
     symbols=[]
