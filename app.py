@@ -123,7 +123,18 @@ with spyopt:
         with b2:
             st.markdown("#### 🐻 Bear Agent")
             for z in ai.get("bear_case",[]):st.write("•",z)
-        st.info("News/social LLM scoring is intentionally disabled until dedicated source/API credentials are configured; TradePilot will not invent sentiment.")
+        opt=ai.get("options",{})
+        st.markdown("#### 🧾 Options Chain Agent")
+        st.write("Status:",opt.get("status","WAIT"))
+        oc=opt.get("candidate")
+        if oc:
+            q1,q2,q3,q4=st.columns(4)
+            q1.metric("Contract",f"{oc.get('type')} {oc.get('strike')}");q2.metric("Expiration",oc.get("expiration","—"));q3.metric("Ask",f"$"+str(oc.get("ask","—")));q4.metric("Max Debit",f"$"+str(oc.get("max_debit","—")))
+            st.write(f"DTE: {oc.get('dte')} · Bid/Mid/Ask: {oc.get('bid')} / {oc.get('mid')} / {oc.get('ask')} · Spread: {oc.get('spread_pct')}% · IV: {oc.get('iv_pct')}% · Volume: {oc.get('volume')} · OI: {oc.get('open_interest')}")
+        else:
+            st.warning(opt.get("reason","No options candidate while direction is WAIT."))
+        st.caption(opt.get("source","Options-chain data must be verified with your broker."))
+        st.info("News/social LLM scoring uses real supplied evidence when configured; TradePilot does not fabricate missing social sentiment.")
 
 with paper:
     st.subheader("Paper Trade Journal")
