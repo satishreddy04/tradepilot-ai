@@ -84,8 +84,49 @@ def setups(rows,title,day_mode=False):
         extra="<br>VWAP: <b>$"+str(r.get("vwap","—"))+"</b><br>ORB H/L: <b>$"+str(r.get("orb_high","—"))+" / $"+str(r.get("orb_low","—"))+"</b>"
     right.markdown('<div class="card"><b>'+str(r.ticker)+'</b> · <span class="status">'+str(r.get("status",""))+'</span><hr>Setup: <b>'+str(r.get("setup",""))+'</b><br>Score: <b>'+str(r.get("score",""))+'/100</b><br>RVOL: <b>'+str(r.get("rvol","—"))+'x</b>'+extra+'<hr>Entry: <b>$'+str(r.get("entry","—"))+'</b><br>Stop: <b>$'+str(r.get("stop","—"))+'</b><br>T1: <b>$'+str(r.get("t1","—"))+'</b><br>T2: <b>$'+str(r.get("t2","—"))+'</b><br>Risk/share: <b>$'+format(risk,'.2f')+'</b><br>Max shares @ $15 risk / $1,500 cash: <b>'+str(shares)+'</b></div>',unsafe_allow_html=True)
 
-day,swing,spyopt,paper,analytics,backtest,news=st.tabs(["⚡ Day Trades","📆 Swing Trades","🎯 SPY Options AI","📝 Paper Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
+day,quality,swing,spyopt,paper,analytics,backtest,news=st.tabs(["⚡ Day Trades","⭐ A+ Day Trade","📆 Swing Trades","🎯 SPY Options AI","📝 Paper Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
 with day:setups(s.get("day",[]),"Top Day Trade Setups",True)
+with quality:
+    st.subheader("⭐ A+ Day Trade Quality")
+    st.caption("Research layer only — it does not change the existing Day Trades scanner.")
+    qr=s.get("quality",[])
+    if not qr:
+        st.info("Waiting for the next scanner snapshot to build A+ quality setups.")
+    else:
+        qdf=pd.DataFrame(qr)
+        show=[x for x in ["ticker","quality_score","grade","quality_state","price","rvol","relative_strength","extension_pct","market_aligned"] if x in qdf]
+        def qstyle(row):
+            state=str(row.get("quality_state",""))
+            if "A+" in state:return ["background-color:#123d2a;color:#7CFFB2;font-weight:700" for _ in row]
+            if state=="CONFIRMED":return ["background-color:#173653;color:#8ED0FF;font-weight:700" for _ in row]
+            if state=="READY":return ["background-color:#44370d;color:#FFE082;font-weight:700" for _ in row]
+            return ["" for _ in row]
+        st.dataframe(qdf[show].style.apply(qstyle,axis=1),use_container_width=True,hide_index=True,height=min(520,72+35*min(len(qdf),12)))
+        qt=st.selectbox("Inspect A+ candidate",qdf.ticker.tolist(),key="quality-inspect")
+        q=qdf[qdf.ticker==qt].iloc[0]
+        k1,k2,k3,k4=st.columns(4)
+        k1.metric("Quality",f'{q.get("quality_score",0)}/100');k2.metric("Grade",q.get("grade","—"));k3.metric("State",q.get("quality_state","—"));k4.metric("RS vs SPY",f'{q.get("relative_strength",0)}%')
+        checks=q.get("checks",{}) if isinstance(q.get("checks",{}),dict) else {}
+        left,right=st.columns([1.25,1])
+        with left:
+            st.markdown("#### Confirmation checklist")
+            for name,ok in checks.items():st.write(("✅" if ok else "❌"),name)
+        with right:
+            st.markdown("#### Trade plan")
+            st.write(f"Entry **${q.get('entry','—')}** · Stop **${q.get('stop','—')}**")
+            st.write(f"1R **${q.get('t1_1r','—')}** · 2R **${q.get('t2_2r','—')}**")
+            st.write(f"Shares **{q.get('shares',0)}** · Planned risk **${q.get('planned_risk',0)}**")
+            st.write(f"RVOL **{q.get('rvol','—')}x** · Extension **{q.get('extension_pct','—')}%**")
+            if not q.get("no_chase",True):st.error("SKIP / WAIT — price is extended more than 0.5% above the ORB trigger.")
+            elif q.get("quality_state")=="A+ CONFIRMED":st.success("A+ CONFIRMED — eligible for paper-trade review; not an automatic order.")
+            else:st.warning("Not A+ yet — wait for missing confirmations.")
+        vals=[{"check":k,"value":100 if v else 0} for k,v in checks.items()]
+        if vals:
+            vf=pd.DataFrame(vals)
+            fig=go.Figure(go.Bar(x=vf["value"],y=vf["check"],orientation="h"))
+            fig.update_layout(height=390,xaxis=dict(range=[0,100],title="Pass"),margin=dict(l=5,r=5,t=20,b=5),paper_bgcolor="#0d1b2d",plot_bgcolor="#0d1b2d",font_color="#cbd7e6")
+            st.plotly_chart(fig,use_container_width=True)
+
 with swing:setups(s.get("swing",[]),"Top Swing Trade Setups")
 with spyopt:
     st.subheader("🎯 SPY Options AI — Multi-Agent Analysis")
