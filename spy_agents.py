@@ -31,7 +31,48 @@ def _llm_sentiment(news_items,social_items):
         return json.loads(txt)
     except Exception as e:
         print("llm sentiment",e);return None
-\ndef build_spy_agents(daily,intraday,news_items=None,social_items=None):
+\n
+def build_options_agent(spot,direction,max_risk=15):
+    out={"status":"WAIT","direction":direction,"contracts_checked":0,"candidate":None,"source":"Yahoo/yfinance option chain; verify with broker"}
+    if direction not in ("CALL BIAS","PUT BIAS"):return out
+    try:
+        import yfinance as yf
+        t=yf.Ticker("SPY"); expiries=list(t.options or [])
+        if not expiries:return out
+        from datetime import date,datetime
+        choices=[]
+        for exp in expiries:
+            try:
+                dte=(datetime.strptime(exp,"%Y-%m-%d").date()-date.today()).days
+                if 7<=dte<=30:choices.append((dte,exp))
+            except:pass
+        if not choices:return out
+        dte,exp=min(choices)
+        ch=t.option_chain(exp); df=ch.calls.copy() if direction=="CALL BIAS" else ch.puts.copy()
+        out["contracts_checked"]=len(df)
+        if df.empty:return out
+        df=df.copy();df["mid"]=(df["bid"].fillna(0)+df["ask"].fillna(0))/2
+        df["spread_pct"]=(df["ask"]-df["bid"])/df["mid"].replace(0,float("nan"))*100
+        df["distance"]=(df["strike"]-spot).abs()/spot*100
+        liquid=df[(df["bid"]>0)&(df["ask"]>0)&(df["mid"]>0)&(df["spread_pct"]<=12)&(df["distance"]<=3)]
+        if "openInterest" in liquid: liquid=liquid[liquid["openInterest"].fillna(0)>=100]
+        if "volume" in liquid: liquid=liquid[liquid["volume"].fillna(0)>=10]
+        if liquid.empty:
+            out["status"]="NO TRADE";out["reason"]="No sufficiently liquid near-the-money contract passed spread/volume/OI filters";return out
+        liquid["cost"]=liquid["ask"]*100
+        affordable=liquid[liquid["cost"]<=max_risk]
+        pool=affordable if not affordable.empty else liquid
+        row=pool.sort_values(["distance","spread_pct"]).iloc[0]
+        cost=float(row["cost"])
+        if cost>max_risk:
+            out["status"]="NO TRADE";out["reason"]=f"Best liquid long option costs about ${cost:.0f}, above ${max_risk} planned-risk limit";return out
+        out["status"]="CANDIDATE"
+        out["candidate"]={"expiration":exp,"dte":dte,"type":"CALL" if direction=="CALL BIAS" else "PUT","strike":round(float(row["strike"]),2),"bid":round(float(row["bid"]),2),"ask":round(float(row["ask"]),2),"mid":round(float(row["mid"]),2),"spread_pct":round(float(row["spread_pct"]),1),"volume":int(row.get("volume",0) or 0),"open_interest":int(row.get("openInterest",0) or 0),"iv_pct":round(float(row.get("impliedVolatility",0) or 0)*100,1),"max_debit":round(cost,2)}
+        return out
+    except Exception as e:
+        out["status"]="UNAVAILABLE";out["reason"]=str(e)[:160];return out
+
+def build_spy_agents(daily,intraday,news_items=None,social_items=None):
     daily=daily.dropna().copy(); intraday=intraday.dropna().copy()
     if daily.empty or intraday.empty:return {}
     close=daily["Close"]
@@ -62,4 +103,4 @@ def _llm_sentiment(news_items,social_items):
     elif not risk_block and tech_score<=30: direction="PUT BIAS"
     available=[tech_score]+([news_score] if news_score is not None else [])+([social_score] if social_score is not None else [])\n    confidence=round(sum(available)/len(available))
     state="CONFIRMED" if confidence>=80 and not risk_block else ("READY" if confidence>=65 and not risk_block else "WATCH")
-    return {"price":round(p,2),"regime":regime,"technical":{"score":int(tech_score),"ema8":round(_last(e8),2),"ema21":round(_last(e21),2),"ema50":round(_last(e50),2),"vwap":round(vwap,2),"rsi":round(rsi_v,1),"macd_bullish":macd_bull,"atr":round(_last(atr),2),"atr_pct":round(atr_pct,2)},"news":{"score":news_score,"items":len(news_items),"status":"LLM + headline evidence" if llm else "Headline evidence score","summary":llm.get("news_summary") if llm else None,"evidence":news_evidence},"social":{"score":social_score,"items":len(social_items),"status":"LLM + social evidence" if llm and social_items else ("Evidence score" if social_items else "Awaiting authorized social feed"),"summary":llm.get("social_summary") if llm else None,"evidence":social_evidence},"bull_case":bull,"bear_case":bear,"risk":{"blocked":risk_block,"reason":"ATR >= 3% of SPY price" if risk_block else "No volatility block","max_planned_risk":15},"decision":{"direction":direction,"confidence":int(confidence),"state":state,"paper_only":True}}
+    return {"price":round(p,2),"regime":regime,"technical":{"score":int(tech_score),"ema8":round(_last(e8),2),"ema21":round(_last(e21),2),"ema50":round(_last(e50),2),"vwap":round(vwap,2),"rsi":round(rsi_v,1),"macd_bullish":macd_bull,"atr":round(_last(atr),2),"atr_pct":round(atr_pct,2)},"news":{"score":news_score,"items":len(news_items),"status":"LLM + headline evidence" if llm else "Headline evidence score","summary":llm.get("news_summary") if llm else None,"evidence":news_evidence},"social":{"score":social_score,"items":len(social_items),"status":"LLM + social evidence" if llm and social_items else ("Evidence score" if social_items else "Awaiting authorized social feed"),"summary":llm.get("social_summary") if llm else None,"evidence":social_evidence},"bull_case":bull,"bear_case":bear,"risk":{"blocked":risk_block,"reason":"ATR >= 3% of SPY price" if risk_block else "No volatility block","max_planned_risk":15},"decision":{"direction":direction,"confidence":int(confidence),"state":state,"paper_only":True},"options":build_options_agent(p,direction,15)}
