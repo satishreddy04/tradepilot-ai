@@ -47,9 +47,21 @@ r2[1].metric("QQQ",m.get("qqq",{}).get("price","—"))
 r2[2].metric("Snapshot",short_time(s.get("generated_at")))
 
 st.markdown('<div class="card"><b>Overall Market: '+str(m.get("label","UNKNOWN"))+'</b><br><span class="muted">Rules-based SPY/QQQ EMA structure + watchlist breadth; not a forecast.</span></div>',unsafe_allow_html=True)
+
+sectors=s.get("sectors",[])
+if sectors:
+    st.subheader("🔥 Sector Strength — Latest Available Session")
+    sc=st.columns(min(4,len(sectors)))
+    for n,x in enumerate(sectors[:4]):
+        sc[n].metric("#"+str(x.get("rank",""))+" "+str(x.get("sector","")),str(x.get("state","")),delta=str(x.get("day_pct","—"))+"% day")
+    with st.expander("View all 11 sectors"):
+        sdf=pd.DataFrame(sectors)
+        show=[x for x in ["rank","sector","etf","state","day_pct","week_pct","rs_vs_spy","strength_score"] if x in sdf]
+        st.dataframe(sdf[show],use_container_width=True,hide_index=True)
+    st.caption("Strength combines sector ETF daily/5-day performance and 5-day relative strength versus SPY. It is context, not a buy signal.")
 scan=s.get("scanner",{})
 if scan:
-    st.markdown('<div class="card"><b>Dynamic Market Scanner</b><br><span class="muted">Scanned <b>'+str(scan.get("listed_symbols","—"))+'</b> U.S.-listed symbols → <b>'+str(scan.get("passed_filters","—"))+'</b> passed liquidity/momentum filters → <b>'+str(scan.get("intraday_scanned","—"))+'</b> received intraday analysis → Top <b>'+str(scan.get("day_displayed","—"))+'</b> Day / <b>'+str(scan.get("swing_displayed","—"))+'</b> Swing displayed.</span></div>',unsafe_allow_html=True)
+    st.markdown('<div class="card"><b>Dynamic Market Scanner</b><br><span class="muted">Scanned <b>'+str(scan.get("listed_symbols","—"))+'</b> U.S.-listed symbols → <b>'+str(scan.get("passed_filters","—"))+'</b> passed liquidity/momentum filters → <b>'+str(scan.get("intraday_scanned","—"))+'</b> received intraday analysis → Top <b>'+str(scan.get("day_displayed","—"))+'</b> Day / <b>'+str(scan.get("swing_displayed","—"))+'</b> Swing displayed. Major-index setups: Day <b>'+str(scan.get("day_major_index","—"))+'</b>, Swing <b>'+str(scan.get("swing_major_index","—"))+'</b> (target up to 30 each).</span></div>',unsafe_allow_html=True)
 
 def setups(rows,title,day_mode=False):
     st.subheader(title)
@@ -85,7 +97,7 @@ def setups(rows,title,day_mode=False):
     right.markdown('<div class="card"><b>'+str(r.ticker)+'</b> · <span class="status">'+str(r.get("status",""))+'</span><hr>Setup: <b>'+str(r.get("setup",""))+'</b><br>Score: <b>'+str(r.get("score",""))+'/100</b><br>RVOL: <b>'+str(r.get("rvol","—"))+'x</b>'+extra+'<hr>Entry: <b>$'+str(r.get("entry","—"))+'</b><br>Stop: <b>$'+str(r.get("stop","—"))+'</b><br>T1: <b>$'+str(r.get("t1","—"))+'</b><br>T2: <b>$'+str(r.get("t2","—"))+'</b><br>Risk/share: <b>$'+format(risk,'.2f')+'</b><br>Max shares @ $15 risk / $1,500 cash: <b>'+str(shares)+'</b></div>',unsafe_allow_html=True)
 
 day,quality,swing,spyopt,paper,analytics,backtest,news=st.tabs(["⚡ Day Trades","🧭 Advanced Day Trader","📆 Swing Trades","🎯 SPY Options AI","📝 Paper Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
-with day:setups(s.get("day",[]),"Top Day Trade Setups",True)
+with day:setups(s.get("day",[]),"Top 40 Day Trade Setups",True)
 with quality:
     st.markdown("## 🧭 Advanced Day Trader")
     st.caption("Session-aware A+ setup engine • Premarket → Opening → Midday → Power Hour → Close • Paper/research mode")
@@ -151,7 +163,7 @@ with quality:
             fig.update_layout(height=390,xaxis=dict(range=[0,100],title="Pass"),margin=dict(l=5,r=5,t=20,b=5),paper_bgcolor="#0d1b2d",plot_bgcolor="#0d1b2d",font_color="#cbd7e6")
             st.plotly_chart(fig,use_container_width=True)
 
-with swing:setups(s.get("swing",[]),"Top Swing Trade Setups")
+with swing:setups(s.get("swing",[]),"Top 40 Swing Trade Setups")
 with spyopt:
     st.subheader("🎯 SPY Options AI — Multi-Agent Analysis")
     ai=s.get("spy_ai",{})
