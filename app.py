@@ -60,7 +60,7 @@ if sectors:
         st.dataframe(sdf[show],use_container_width=True,hide_index=True)
     st.caption("Day-trading strength combines performance since the open, relative strength vs SPY, VWAP, EMA8/21 trend and intraday volume participation. It is context, not a buy signal.")
 
-swing_secs=snap.get("swing_sectors",[])
+swing_secs=s.get("swing_sectors",[])
 if swing_secs:
     st.subheader("📈 Swing Trading Sector Strength")
     ssdf=pd.DataFrame(swing_secs)
