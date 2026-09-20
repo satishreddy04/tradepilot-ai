@@ -110,6 +110,39 @@ def day_setup(t,g):
     chart=[{"time":str(i),"open":num(x.Open),"high":num(x.High),"low":num(x.Low),"close":num(x.Close)} for i,x in today.tail(50).iterrows()]
     return {"ticker":t,"price":num(p),"score":min(100,int(score)),"rvol":num(rv),"setup":"15m ORB + VWAP + RVOL","status":status,"entry":num(entry),"stop":num(stop),"t1":num(entry+1.5*risk),"t2":num(entry+2.5*risk),"risk_share":num(risk),"vwap":num(vwap),"orb_high":num(orb_high),"orb_low":num(orb_low),"chart":chart}
 
+
+def quality_setup(t,g,spy_g,market):
+    """Research-only A+ day-trade quality layer. It does not alter the existing day_setup."""
+    base=day_setup(t,g)
+    if not base:return
+    x=add_intraday_rvol(g); sx=regular_session(spy_g)
+    latest=x.index[-1].date(); today=x[x.index.date==latest]
+    if len(today)<4:return
+    r=today.iloc[-1]; p=float(r.Close)
+    today["e8"]=today.Close.ewm(span=8,adjust=False).mean();today["e21"]=today.Close.ewm(span=21,adjust=False).mean()
+    tp=(today.High+today.Low+today.Close)/3; vw=(tp*today.Volume).cumsum()/today.Volume.cumsum().replace(0,float("nan"))
+    vwap=float(vw.iloc[-1]); vwap_rising=len(vw)>=4 and float(vw.iloc[-1])>float(vw.iloc[-4])
+    ema_rising=len(today)>=4 and float(today.e8.iloc[-1])>float(today.e8.iloc[-4]) and float(today.e21.iloc[-1])>=float(today.e21.iloc[-4])
+    orb=today.iloc[:3]; orb_high=float(orb.High.max()); orb_low=float(orb.Low.min())
+    close_confirm=len(today)>3 and float(today.Close.iloc[-1])>orb_high
+    recent_vol=float(today.Volume.iloc[-4:-1].mean()) if len(today)>=4 else 0
+    breakout_volume=recent_vol>0 and float(r.Volume)>recent_vol*1.2
+    rv=float(r.rv) if pd.notna(r.rv) else 0.0
+    # Time-matched relative strength vs SPY from today's regular-session return.
+    st=sx[sx.index.date==sx.index[-1].date()] if len(sx) else sx
+    stock_ret=(p/float(today.Close.iloc[0])-1)*100 if len(today) else 0
+    spy_ret=(float(st.Close.iloc[-1])/float(st.Close.iloc[0])-1)*100 if len(st)>1 else 0
+    rs=stock_ret-spy_ret; rs_ok=rs>=0.30
+    market_ok=bool(market.get("spy",{}).get("bullish")) and bool(market.get("qqq",{}).get("bullish"))
+    extension=(p/orb_high-1)*100 if orb_high else 0; no_chase=extension<=0.5
+    checks={"ORB close":close_confirm,"VWAP":p>vwap,"VWAP rising":vwap_rising,"EMA trend":p>float(r.e8)>float(r.e21),"EMA rising":ema_rising,"RVOL ≥ 2":rv>=2,"Breakout volume":breakout_volume,"Relative strength":rs_ok,"SPY + QQQ aligned":market_ok,"Not extended":no_chase}
+    score=round(100*sum(checks.values())/len(checks))
+    grade="A+" if score>=90 else ("A" if score>=80 else ("B" if score>=70 else "C"))
+    state="A+ CONFIRMED" if grade=="A+" and close_confirm and no_chase else ("CONFIRMED" if score>=80 and close_confirm else ("READY" if score>=70 else "WATCH"))
+    entry=float(base["entry"]); stop=float(base["stop"]); risk=max(.01,entry-stop)
+    shares=min(int(15/risk),int(1500/entry)) if entry>0 else 0
+    return {**base,"quality_score":score,"grade":grade,"quality_state":state,"relative_strength":round(rs,2),"stock_session_return":round(stock_ret,2),"spy_session_return":round(spy_ret,2),"vwap_rising":vwap_rising,"ema_rising":ema_rising,"breakout_volume":breakout_volume,"market_aligned":market_ok,"extension_pct":round(extension,2),"no_chase":no_chase,"checks":checks,"shares":shares,"planned_risk":round(shares*risk,2),"t1_1r":num(entry+risk),"t2_2r":num(entry+2*risk)}
+
 def swing_setup(t,g):
     g=ind(g)
     if len(g)<21:return
@@ -155,7 +188,7 @@ def main():
     d=yf.download(U,period="4mo",interval="1d",group_by="ticker",threads=True,progress=False)
     # prepost=False prevents extended-hours prints from contaminating ORB/VWAP/RVOL.
     i=yf.download(U,period="5d",interval="5m",group_by="ticker",prepost=False,threads=True,progress=False)
-    day=[];swing=[]
+    day=[];swing=[];quality=[]
     for t in [x for x in U if x not in ("SPY","QQQ")]:
         try:
             x=day_setup(t,i[t])
@@ -178,7 +211,7 @@ def main():
             spy_ai["market_data_status"]="LATEST AVAILABLE SESSION"
     except Exception as e:
         print("spy agents",e); spy_ai={"error":str(e)[:180],"market_data_status":"UNAVAILABLE"}
-    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"day_displayed":len(day),"swing_displayed":len(swing),"dynamic":True},"market":m,"day":day,"swing":swing,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
+    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"day_displayed":len(day),"swing_displayed":len(swing),"dynamic":True},"market":m,"day":day,"swing":swing,"quality":quality,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
     OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(snap,separators=(",",":")))
     # Paper journal: open a simulated trade on a new CONFIRMED day signal and track stop/T1/T2.
     try: journal=json.loads(JOURNAL.read_text()) if JOURNAL.exists() else []
