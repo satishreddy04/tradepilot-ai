@@ -57,7 +57,16 @@ def setups(rows,title,day_mode=False):
         st.info("Waiting for the next market-data snapshot.");return
     df=pd.DataFrame(rows)
     cols=[x for x in ["ticker","price","score","rvol","setup","status","entry","stop","t1","t2","risk_share"] if x in df]
-    st.dataframe(df[cols],use_container_width=True,hide_index=True,height=min(560,72+35*min(len(df),14)))
+    view=df[cols].copy()
+    def status_style(row):
+        status=str(row.get("status","")).upper()
+        if status=="CONFIRMED":
+            return ["background-color:#123d2a;color:#7CFFB2;font-weight:700" for _ in row]
+        if status=="READY":
+            return ["background-color:#44370d;color:#FFE082;font-weight:700" for _ in row]
+        return ["" for _ in row]
+    styled=view.style.apply(status_style,axis=1)
+    st.dataframe(styled,use_container_width=True,hide_index=True,height=min(560,72+35*min(len(df),14)))
     t=st.selectbox("Inspect setup",df.ticker.tolist(),key=title)
     r=df[df.ticker==t].iloc[0]
     cd=r.get("chart",[])
