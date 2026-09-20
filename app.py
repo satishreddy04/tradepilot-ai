@@ -52,35 +52,7 @@ st.markdown('<div class="card"><b>Overall Market: '+str(m.get("label","UNKNOWN")
 sectors=s.get("sectors",[])
 swing_secs=s.get("swing_sectors",[])
 st.markdown("### Sector Strength")
-    with st.expander("Open / close sector strength dashboard", expanded=True):
-    left_sec,right_sec=st.columns(2)
-    with left_sec:
-        st.markdown("#### 🔥 Day Trading Sector Strength (Intraday)")
-        st.caption("Since market open • vs SPY • VWAP • EMA8/21 • RVOL")
-        if sectors:
-            dsec=pd.DataFrame(sectors).sort_values("strength_score",ascending=True)
-            fig=px.bar(dsec,x="strength_score",y="sector",orientation="h",text="state",hover_data=[x for x in ["etf","intraday_pct","rs_vs_spy","above_vwap","ema_bull","rvol"] if x in dsec.columns])
-            fig.update_traces(textposition="inside")
-            fig.update_layout(height=420,margin=dict(l=5,r=10,t=5,b=5),xaxis_title="",yaxis_title="",showlegend=False)
-            st.plotly_chart(fig,use_container_width=True)
-            with st.expander("View all 11 day-trading sectors"):
-                st.dataframe(dsec.sort_values("strength_score",ascending=False)[[x for x in ["rank","sector","etf","state","intraday_pct","rs_vs_spy","above_vwap","ema_bull","rvol","strength_score"] if x in dsec]],use_container_width=True,hide_index=True)
-        else:
-            st.info("Day sector data is waiting for the next scanner snapshot.")
-    with right_sec:
-        st.markdown("#### 📊 Swing Trading Sector Strength (5D / 20D)")
-        st.caption("5-day & 20-day momentum • vs SPY • EMA8/21/50 • Swing score")
-        if swing_secs:
-            ssec=pd.DataFrame(swing_secs).sort_values("strength_score",ascending=True)
-            fig2=px.bar(ssec,x="strength_score",y="sector",orientation="h",hover_data=[x for x in ["etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend"] if x in ssec.columns])
-            fig2.update_traces(texttemplate="%{x:.0f}",textposition="inside")
-            fig2.update_layout(height=420,margin=dict(l=5,r=10,t=5,b=5),xaxis_title="",yaxis_title="",showlegend=False)
-            st.plotly_chart(fig2,use_container_width=True)
-            with st.expander("View all 11 swing sectors"):
-                st.dataframe(ssec.sort_values("strength_score",ascending=False)[[x for x in ["rank","sector","etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend","strength_score"] if x in ssec]],use_container_width=True,hide_index=True)
-        else:
-            st.info("Swing sector data is waiting for the next successful scanner snapshot.")
-    st.caption("Sector strength is market context, not a standalone buy signal.")
+with st.expander("Open / close sector strength dashboard", expanded=True):,    left_sec,right_sec=st.columns(2),    with left_sec:,        st.markdown("#### 🔥 Day Trading Sector Strength (Intraday)"),        st.caption("Since market open • vs SPY • VWAP • EMA8/21 • RVOL"),        if sectors:,            dsec=pd.DataFrame(sectors).sort_values("strength_score",ascending=True),            fig=px.bar(dsec,x="strength_score",y="sector",orientation="h",text="state",hover_data=[x for x in ["etf","intraday_pct","rs_vs_spy","above_vwap","ema_bull","rvol"] if x in dsec.columns]),            fig.update_traces(textposition="inside"),            fig.update_layout(height=420,margin=dict(l=5,r=10,t=5,b=5),xaxis_title="",yaxis_title="",showlegend=False),            st.plotly_chart(fig,use_container_width=True),            with st.expander("View all 11 day-trading sectors"):,                st.dataframe(dsec.sort_values("strength_score",ascending=False)[[x for x in ["rank","sector","etf","state","intraday_pct","rs_vs_spy","above_vwap","ema_bull","rvol","strength_score"] if x in dsec]],use_container_width=True,hide_index=True),        else:,            st.info("Day sector data is waiting for the next scanner snapshot."),    with right_sec:,        st.markdown("#### 📊 Swing Trading Sector Strength (5D / 20D)"),        st.caption("5-day & 20-day momentum • vs SPY • EMA8/21/50 • Swing score"),        if swing_secs:,            ssec=pd.DataFrame(swing_secs).sort_values("strength_score",ascending=True),            fig2=px.bar(ssec,x="strength_score",y="sector",orientation="h",hover_data=[x for x in ["etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend"] if x in ssec.columns]),            fig2.update_traces(texttemplate="%{x:.0f}",textposition="inside"),            fig2.update_layout(height=420,margin=dict(l=5,r=10,t=5,b=5),xaxis_title="",yaxis_title="",showlegend=False),            st.plotly_chart(fig2,use_container_width=True),            with st.expander("View all 11 swing sectors"):,                st.dataframe(ssec.sort_values("strength_score",ascending=False)[[x for x in ["rank","sector","etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend","strength_score"] if x in ssec]],use_container_width=True,hide_index=True),        else:,            st.info("Swing sector data is waiting for the next successful scanner snapshot."),    st.caption("Sector strength is market context, not a standalone buy signal."),
     
     scan=s.get("scanner",{})
 if scan:
