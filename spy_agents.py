@@ -5,7 +5,33 @@ def _last(x):
     try:return float(x.iloc[-1])
     except:return 0.0
 
-def build_spy_agents(daily,intraday,news_items=None):
+
+POSITIVE=("beat","beats","gain","gains","rally","rises","growth","strong","record","upgrade","optimism","bullish","surge","cut rates","rate cut")
+NEGATIVE=("miss","misses","loss","losses","falls","drop","weak","downgrade","fear","bearish","selloff","inflation","recession","war","tariff")
+
+def _headline_sentiment(items):
+    vals=[]; evidence=[]
+    for x in items or []:
+        title=str(x.get("title","")).lower()
+        pos=sum(w in title for w in POSITIVE); neg=sum(w in title for w in NEGATIVE)
+        if pos or neg:
+            score=(pos-neg)/max(1,pos+neg);vals.append(score);evidence.append(x.get("title",""))
+    if not vals:return None,[]
+    return round(50+50*sum(vals)/len(vals)),evidence[:5]
+
+def _llm_sentiment(news_items,social_items):
+    key=os.getenv("OPENAI_API_KEY")
+    if not key:return None
+    payload={"model":os.getenv("OPENAI_MODEL","gpt-5-mini"),"input":[{"role":"system","content":"Analyze supplied SPY market news/social evidence only. Return JSON with news_score and social_score from 0 bearish to 100 bullish, plus short news_summary and social_summary. Do not invent facts."},{"role":"user","content":json.dumps({"news":news_items[:12],"social":social_items[:20]})}],"text":{"format":{"type":"json_object"}}}
+    try:
+        r=requests.post("https://api.openai.com/v1/responses",headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"},json=payload,timeout=30);r.raise_for_status();z=r.json()
+        txt=z.get("output_text")
+        if not txt:
+            txt=z["output"][0]["content"][0]["text"]
+        return json.loads(txt)
+    except Exception as e:
+        print("llm sentiment",e);return None
+\ndef build_spy_agents(daily,intraday,news_items=None,social_items=None):
     daily=daily.dropna().copy(); intraday=intraday.dropna().copy()
     if daily.empty or intraday.empty:return {}
     close=daily["Close"]
@@ -34,6 +60,6 @@ def build_spy_agents(daily,intraday,news_items=None):
     direction="WAIT"
     if not risk_block and tech_score>=75: direction="CALL BIAS"
     elif not risk_block and tech_score<=30: direction="PUT BIAS"
-    confidence=tech_score
+    available=[tech_score]+([news_score] if news_score is not None else [])+([social_score] if social_score is not None else [])\n    confidence=round(sum(available)/len(available))
     state="CONFIRMED" if confidence>=80 and not risk_block else ("READY" if confidence>=65 and not risk_block else "WATCH")
-    return {"price":round(p,2),"regime":regime,"technical":{"score":int(tech_score),"ema8":round(_last(e8),2),"ema21":round(_last(e21),2),"ema50":round(_last(e50),2),"vwap":round(vwap,2),"rsi":round(rsi_v,1),"macd_bullish":macd_bull,"atr":round(_last(atr),2),"atr_pct":round(atr_pct,2)},"news":{"score":news_score,"items":len(news_items),"status":"FEED ONLY — LLM sentiment not configured"},"social":{"score":social_score,"status":"NOT CONFIGURED — no social score is fabricated"},"bull_case":bull,"bear_case":bear,"risk":{"blocked":risk_block,"reason":"ATR >= 3% of SPY price" if risk_block else "No volatility block","max_planned_risk":15},"decision":{"direction":direction,"confidence":int(confidence),"state":state,"paper_only":True}}
+    return {"price":round(p,2),"regime":regime,"technical":{"score":int(tech_score),"ema8":round(_last(e8),2),"ema21":round(_last(e21),2),"ema50":round(_last(e50),2),"vwap":round(vwap,2),"rsi":round(rsi_v,1),"macd_bullish":macd_bull,"atr":round(_last(atr),2),"atr_pct":round(atr_pct,2)},"news":{"score":news_score,"items":len(news_items),"status":"LLM + headline evidence" if llm else "Headline evidence score","summary":llm.get("news_summary") if llm else None,"evidence":news_evidence},"social":{"score":social_score,"items":len(social_items),"status":"LLM + social evidence" if llm and social_items else ("Evidence score" if social_items else "Awaiting authorized social feed"),"summary":llm.get("social_summary") if llm else None,"evidence":social_evidence},"bull_case":bull,"bear_case":bear,"risk":{"blocked":risk_block,"reason":"ATR >= 3% of SPY price" if risk_block else "No volatility block","max_planned_risk":15},"decision":{"direction":direction,"confidence":int(confidence),"state":state,"paper_only":True}}
