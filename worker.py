@@ -247,9 +247,13 @@ def main():
     major_candidates=list(major)
     U=["SPY","QQQ"]+list(dict.fromkeys([x for x in major_candidates if x not in ("SPY","QQQ")]+[x for x in candidates if x not in ("SPY","QQQ")]))
     print("fast dashboard snapshot:",len(candidates),"fallback +",len(major_candidates),"major candidates")
-    d=yf.download(U,period="4mo",interval="1d",group_by="ticker",threads=True,progress=False)
+    print("STEP daily download",flush=True)
+    d=yf.download(U,period="4mo",interval="1d",group_by="ticker",threads=True,progress=False,timeout=20)
+    print("STEP daily done",flush=True)
     # prepost=False prevents extended-hours prints from contaminating ORB/VWAP/RVOL.
-    i=yf.download(U,period="5d",interval="5m",group_by="ticker",prepost=False,threads=True,progress=False)
+    print("STEP intraday download",flush=True)
+    i=yf.download(U,period="5d",interval="5m",group_by="ticker",prepost=False,threads=True,progress=False,timeout=20)
+    print("STEP intraday done",flush=True)
     day=[];swing=[];quality=[]
     for t in [x for x in U if x not in ("SPY","QQQ")]:
         try:
@@ -263,7 +267,9 @@ def main():
     day,day_major_count=pick_40(day,major)
     swing,swing_major_count=pick_40(swing,major)
     m=regime(d)
+    print("STEP sectors",flush=True)
     sectors=sector_strength()
+    print("STEP sectors done",len(sectors),flush=True)
     # Populate the isolated Advanced quality engine from the same analyzed universe.
     for t in [x for x in U if x not in ("SPY","QQQ")]:
         try:
@@ -271,7 +277,10 @@ def main():
             if q: quality.append(q)
         except Exception as e: print("quality",t,e)
     quality=sorted(quality,key=lambda x:(x.get("session_score",0),x.get("rvol") or 0),reverse=True)[:40]
+    print("STEP news",flush=True)
     news_items=news()
+    print("STEP news done",len(news_items),flush=True)
+    print("STEP spy agents",flush=True)
     try:
         spy_daily=d["SPY"].dropna()
         spy_intraday=regular_session(i["SPY"]).dropna()
@@ -281,6 +290,7 @@ def main():
             spy_ai["market_data_status"]="LATEST AVAILABLE SESSION"
     except Exception as e:
         print("spy agents",e); spy_ai={"error":str(e)[:180],"market_data_status":"UNAVAILABLE"}
+    print("STEP spy agents done",flush=True)
     snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"scan_mode":"FAST SNAPSHOT","day_displayed":len(day),"swing_displayed":len(swing),"day_major_index":day_major_count,"swing_major_index":swing_major_count,"target_major_index":30,"dynamic":True},"market":m,"sectors":sectors,"day":day,"swing":swing,"quality":quality,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
     OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(snap,separators=(",",":")))
     # Paper journal: open a simulated trade on a new CONFIRMED day signal and track stop/T1/T2.
