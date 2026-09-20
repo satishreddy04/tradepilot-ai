@@ -33,7 +33,7 @@ def sector_strength():
     out=[]
     try:
         syms=list(SECTOR_ETFS.values())+["SPY"]
-        z=yf.download(syms,period="5d",interval="5m",group_by="ticker",prepost=False,threads=True,progress=False,timeout=20)
+        z=yf.download(syms,period="5d",interval="15m",group_by="ticker",prepost=False,threads=True,progress=False,timeout=10)
         def bars(sym):
             try:
                 g=z[sym].dropna(how="all")
