@@ -49,30 +49,37 @@ r2[2].metric("Snapshot",short_time(s.get("generated_at")))
 st.markdown('<div class="card"><b>Overall Market: '+str(m.get("label","UNKNOWN"))+'</b><br><span class="muted">Rules-based SPY/QQQ EMA structure + watchlist breadth; not a forecast.</span></div>',unsafe_allow_html=True)
 
 sectors=s.get("sectors",[])
-if sectors:
-    st.subheader("🔥 Day Trading Sector Strength")
-    sc=st.columns(min(4,len(sectors)))
-    for n,x in enumerate(sectors[:4]):
-        sc[n].metric("#"+str(x.get("rank",""))+" "+str(x.get("sector","")),str(x.get("state","")),delta=str(x.get("intraday_pct","—"))+"% since open")
-    with st.expander("View all 11 sectors"):
-        sdf=pd.DataFrame(sectors)
-        show=[x for x in ["rank","sector","etf","state","intraday_pct","rs_vs_spy","above_vwap","ema_bull","rvol","strength_score"] if x in sdf]
-        st.dataframe(sdf[show],use_container_width=True,hide_index=True)
-    st.caption("Day-trading strength combines performance since the open, relative strength vs SPY, VWAP, EMA8/21 trend and intraday volume participation. It is context, not a buy signal.")
-
 swing_secs=s.get("swing_sectors",[])
-st.subheader("📈 Swing Trading Sector Strength (5D / 20D)")
-if swing_secs:
-    ssdf=pd.DataFrame(swing_secs).sort_values("strength_score",ascending=True)
-    fig=px.bar(ssdf,x="strength_score",y="sector",orientation="h",text="strength_score",hover_data=["etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend"])
-    fig.update_traces(textposition="outside")
-    fig.update_layout(height=430,margin=dict(l=10,r=35,t=10,b=10),xaxis_title="Swing Strength Score",yaxis_title="",showlegend=False)
-    st.plotly_chart(fig,use_container_width=True)
-    with st.expander("View all 11 swing sectors"):
-        st.dataframe(ssdf.sort_values("strength_score",ascending=False)[[x for x in ["rank","sector","etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend","strength_score"] if x in ssdf]],use_container_width=True,hide_index=True)
-    st.caption("Swing strength combines 5-day and 20-day momentum, 20-day relative strength versus SPY and EMA8/21/50 trend structure.")
-else:
-    st.info("Swing sector data is waiting for the next successful scanner snapshot. Day-trading data remains available.")
+st.markdown("### Sector Strength")
+left_sec,right_sec=st.columns(2)
+with left_sec:
+    st.markdown("#### 🔥 Day Trading Sector Strength (Intraday)")
+    st.caption("Since market open • vs SPY • VWAP • EMA8/21 • RVOL")
+    if sectors:
+        dsec=pd.DataFrame(sectors).sort_values("strength_score",ascending=True)
+        fig=px.bar(dsec,x="strength_score",y="sector",orientation="h",text="state",hover_data=["etf","intraday_pct","rs_vs_spy","above_vwap","ema_bull","rvol"])
+        fig.update_traces(textposition="inside")
+        fig.update_layout(height=420,margin=dict(l=5,r=10,t=5,b=5),xaxis_title="",yaxis_title="",showlegend=False)
+        st.plotly_chart(fig,use_container_width=True)
+        with st.expander("View all 11 day-trading sectors"):
+            st.dataframe(dsec.sort_values("strength_score",ascending=False)[[x for x in ["rank","sector","etf","state","intraday_pct","rs_vs_spy","above_vwap","ema_bull","rvol","strength_score"] if x in dsec]],use_container_width=True,hide_index=True)
+    else:
+        st.info("Day sector data is waiting for the next scanner snapshot.")
+with right_sec:
+    st.markdown("#### 📊 Swing Trading Sector Strength (5D / 20D)")
+    st.caption("5-day & 20-day momentum • vs SPY • EMA8/21/50 • Swing score")
+    if swing_secs:
+        ssec=pd.DataFrame(swing_secs).sort_values("strength_score",ascending=True)
+        fig2=px.bar(ssec,x="strength_score",y="sector",orientation="h",text="strength_score",hover_data=["etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend"])
+        fig2.update_traces(textposition="inside")
+        fig2.update_layout(height=420,margin=dict(l=5,r=10,t=5,b=5),xaxis_title="",yaxis_title="",showlegend=False)
+        st.plotly_chart(fig2,use_container_width=True)
+        with st.expander("View all 11 swing sectors"):
+            st.dataframe(ssec.sort_values("strength_score",ascending=False)[[x for x in ["rank","sector","etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend","strength_score"] if x in ssec]],use_container_width=True,hide_index=True)
+    else:
+        st.info("Swing sector data is waiting for the next successful scanner snapshot.")
+st.caption("Sector strength is market context, not a standalone buy signal.")
+
 scan=s.get("scanner",{})
 if scan:
     st.markdown('<div class="card"><b>Dynamic Market Scanner</b><br><span class="muted">Scanned <b>'+str(scan.get("listed_symbols","—"))+'</b> U.S.-listed symbols → <b>'+str(scan.get("passed_filters","—"))+'</b> passed liquidity/momentum filters → <b>'+str(scan.get("intraday_scanned","—"))+'</b> received intraday analysis → Top <b>'+str(scan.get("day_displayed","—"))+'</b> Day / <b>'+str(scan.get("swing_displayed","—"))+'</b> Swing displayed. Major-index setups: Day <b>'+str(scan.get("day_major_index","—"))+'</b>, Swing <b>'+str(scan.get("swing_major_index","—"))+'</b> (target 25 Major Index + 25 Broader Market each; shortages are filled only by qualified setups).</span></div>',unsafe_allow_html=True)
