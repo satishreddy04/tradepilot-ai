@@ -141,7 +141,31 @@ def quality_setup(t,g,spy_g,market):
     state="A+ CONFIRMED" if grade=="A+" and close_confirm and no_chase else ("CONFIRMED" if score>=80 and close_confirm else ("READY" if score>=70 else "WATCH"))
     entry=float(base["entry"]); stop=float(base["stop"]); risk=max(.01,entry-stop)
     shares=min(int(15/risk),int(1500/entry)) if entry>0 else 0
-    return {**base,"quality_score":score,"grade":grade,"quality_state":state,"relative_strength":round(rs,2),"stock_session_return":round(stock_ret,2),"spy_session_return":round(spy_ret,2),"vwap_rising":vwap_rising,"ema_rising":ema_rising,"breakout_volume":breakout_volume,"market_aligned":market_ok,"extension_pct":round(extension,2),"no_chase":no_chase,"checks":checks,"shares":shares,"planned_risk":round(shares*risk,2),"t1_1r":num(entry+risk),"t2_2r":num(entry+2*risk)}
+    # Session-specific context: the same candidate is evaluated differently through the day.
+    hhmm=today.index[-1].strftime("%H:%M")
+    if hhmm<"09:30": phase="PREMARKET"
+    elif hhmm<"10:30": phase="OPENING"
+    elif hhmm<"13:30": phase="MIDDAY"
+    elif hhmm<"15:45": phase="POWER HOUR"
+    else: phase="CLOSE"
+    hod=float(today.High.max()); lod=float(today.Low.min())
+    last6=today.tail(6)
+    range6=float(last6.High.max()-last6.Low.min()) if len(last6) else 0
+    avg_range=float((today.High-today.Low).tail(12).mean()) if len(today) else 0
+    tight=avg_range>0 and range6<=avg_range*2.5
+    vol_contract=len(today)>=8 and float(today.Volume.tail(3).mean())<float(today.Volume.tail(8).mean())
+    near_hod=p>=hod*.997 if hod else False
+    vwap_reclaim=p>vwap and float(today.Close.iloc[-2])<=float(vw.iloc[-2]) if len(today)>1 else False
+    session_checks={
+      "PREMARKET":{"Daily trend":bool(market_ok),"Relative strength":rs_ok,"Liquidity / RVOL":rv>=1.5,"Not extended":no_chase},
+      "OPENING":checks,
+      "MIDDAY":{"Above VWAP":p>vwap,"VWAP rising":vwap_rising,"EMA trend":p>float(r.e8)>float(r.e21),"Tight consolidation":tight,"Volume contraction":vol_contract,"Relative strength":rs_ok,"Market aligned":market_ok,"Not extended":no_chase},
+      "POWER HOUR":{"Near HOD":near_hod,"Above VWAP":p>vwap,"EMA trend":p>float(r.e8)>float(r.e21),"Volume expansion":breakout_volume or rv>=1.5,"Relative strength":rs_ok,"Market aligned":market_ok,"Not extended":no_chase},
+      "CLOSE":{"Above VWAP":p>vwap,"EMA trend":p>float(r.e8)>float(r.e21),"Relative strength":rs_ok,"Market aligned":market_ok}
+    }
+    active=session_checks.get(phase,checks); session_score=round(100*sum(active.values())/len(active)) if active else 0
+    session_state="A+ CONFIRMED" if session_score>=90 and no_chase else ("CONFIRMED" if session_score>=80 else ("READY" if session_score>=70 else "WATCH"))
+    return {**base,"quality_score":score,"grade":grade,"quality_state":state,"phase":phase,"session_score":session_score,"session_state":session_state,"session_checks":active,"relative_strength":round(rs,2),"stock_session_return":round(stock_ret,2),"spy_session_return":round(spy_ret,2),"vwap_rising":vwap_rising,"ema_rising":ema_rising,"breakout_volume":breakout_volume,"market_aligned":market_ok,"extension_pct":round(extension,2),"no_chase":no_chase,"hod":num(hod),"lod":num(lod),"tight_consolidation":tight,"volume_contraction":vol_contract,"vwap_reclaim":vwap_reclaim,"checks":checks,"shares":shares,"planned_risk":round(shares*risk,2),"t1_1r":num(entry+risk),"t2_2r":num(entry+2*risk)}
 
 def swing_setup(t,g):
     g=ind(g)
