@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "worker.py"\n      - "spy_agents.py"
+      - "worker.py"
+      - "spy_agents.py"
       - "universe.txt"
       - "app.py"
       - "requirements.txt"
@@ -29,7 +30,9 @@ jobs:
       - run: python worker.py
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}\n          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}\n          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
       - run: python backtest.py
       - run: |
           git config user.name tradepilot-bot
