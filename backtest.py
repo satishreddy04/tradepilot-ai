@@ -6,7 +6,7 @@ import yfinance as yf
 UNIVERSE="NVDA AMD PLTR ANET AVGO ARM SMCI CRWD NET MU TSLA META AMZN GOOGL APP HOOD COIN RKLB VRT DELL MRVL CLS ALAB TGTX BE".split()
 OUT=Path("docs/data/backtest.json")
 RISK=5.0
-START_EQUITY=500.0
+START_EQUITY=1500.0
 
 def test_symbol(t):
     # 60 days of 15m data keeps the test reproducible with Yahoo's intraday limits.
