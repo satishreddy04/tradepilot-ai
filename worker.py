@@ -40,6 +40,7 @@ def discover_candidates(symbols):
 
 U=[]
 OUT=Path("docs/data/snapshot.json")
+STATE=Path("docs/data/state.json")
 
 def num(x):
     try:return None if pd.isna(x) else round(float(x),2)
@@ -167,10 +168,30 @@ def main():
     m=regime(d)
     snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"day_displayed":len(day),"swing_displayed":len(swing),"dynamic":True},"market":m,"day":day,"swing":swing,"news":news(),"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
     OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(snap,separators=(",",":")))
-    token=os.getenv("TELEGRAM_BOT_TOKEN");chat=os.getenv("TELEGRAM_CHAT_ID");confirmed=[x for x in day if x["status"]=="CONFIRMED"][:3]
-    if token and chat and confirmed:
-        msg="TradePilot DAY confirmed\n"+"\n".join(x["ticker"]+": entry "+str(x["entry"])+" stop "+str(x["stop"])+" T1 "+str(x["t1"])+" T2 "+str(x["t2"]) for x in confirmed)
-        requests.post("https://api.telegram.org/bot"+token+"/sendMessage",data={"chat_id":chat,"text":msg},timeout=15)
+    # Persist setup states so Telegram only fires on meaningful transitions.
+    try: previous=json.loads(STATE.read_text()) if STATE.exists() else {}
+    except: previous={}
+    current={}; transitions=[]
+    for kind,rows in (("DAY",day),("SWING",swing)):
+        for x in rows:
+            key=kind+":"+x["ticker"]; new=x["status"]; old=previous.get(key,"WATCH")
+            current[key]=new
+            if new in ("READY","CONFIRMED") and new!=old:
+                transitions.append((kind,old,new,x))
+    STATE.parent.mkdir(parents=True,exist_ok=True)
+    STATE.write_text(json.dumps(current,separators=(",",":")))
+
+    token=os.getenv("TELEGRAM_BOT_TOKEN"); chat=os.getenv("TELEGRAM_CHAT_ID")
+    if token and chat:
+        for kind,old,new,x in transitions[:10]:
+            risk=float(x.get("risk_share") or 0); entry=float(x.get("entry") or 0)
+            by_risk=int(15/risk) if risk>0 else 0; by_cash=int(1500/entry) if entry>0 else 0
+            shares=min(by_risk,by_cash)
+            msg=(f"TradePilot {kind}: {old} -> {new}\n{x['ticker']} | {x.get('setup')}\n"
+                 f"Entry {x.get('entry')} | Stop {x.get('stop')} | T1 {x.get('t1')} | T2 {x.get('t2')}\n"
+                 f"RVOL {x.get('rvol')}x | Score {x.get('score')}/100 | Max shares {shares} | Planned risk <= $15")
+            try: requests.post("https://api.telegram.org/bot"+token+"/sendMessage",data={"chat_id":chat,"text":msg},timeout=15)
+            except Exception as e: print("telegram",e)
     print("built",m["label"],len(day),len(swing))
 
 if __name__=="__main__":main()
