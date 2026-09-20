@@ -31,6 +31,7 @@ def load_major_index_members():
 
 def pick_40(rows,major):
     ranked=sorted(rows,key=lambda x:(x.get("score",0),x.get("rvol") or 0),reverse=True)
+    for x in ranked: x["universe"]="MAJOR INDEX" if x.get("ticker") in major else "BROADER MARKET"
     major_rows=[x for x in ranked if x.get("ticker") in major][:30]
     chosen=list(major_rows); used={x["ticker"] for x in chosen}
     chosen.extend([x for x in ranked if x.get("ticker") not in used][:40-len(chosen)])
@@ -255,8 +256,10 @@ def main():
     broad=load_universe()
     major=load_major_index_members()
     candidates=discover_candidates(broad)
-    # Always analyze major-index members too; quality rules still decide whether they display.
-    U=["SPY","QQQ"]+list(dict.fromkeys([x for x in candidates if x not in ("SPY","QQQ")]+[x for x in major if x not in ("SPY","QQQ")]))
+    # Cap the major-index supplement so Yahoo runs remain practical. Major names are
+    # included even when they miss the broad bullish prefilter; setup rules still decide display.
+    major_scan=sorted(major)[:550]
+    U=["SPY","QQQ"]+list(dict.fromkeys([x for x in candidates if x not in ("SPY","QQQ")]+[x for x in major_scan if x not in ("SPY","QQQ")]))
     print("dynamic discovery:",len(broad),"listed ->",len(candidates),"intraday candidates")
     d=yf.download(U,period="4mo",interval="1d",group_by="ticker",threads=True,progress=False)
     # prepost=False prevents extended-hours prints from contaminating ORB/VWAP/RVOL.
