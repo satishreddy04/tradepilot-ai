@@ -72,7 +72,7 @@ def setups(rows,title,day_mode=False):
         extra="<br>VWAP: <b>$"+str(r.get("vwap","—"))+"</b><br>ORB H/L: <b>$"+str(r.get("orb_high","—"))+" / $"+str(r.get("orb_low","—"))+"</b>"
     right.markdown('<div class="card"><b>'+str(r.ticker)+'</b> · <span class="status">'+str(r.get("status",""))+'</span><hr>Setup: <b>'+str(r.get("setup",""))+'</b><br>Score: <b>'+str(r.get("score",""))+'/100</b><br>RVOL: <b>'+str(r.get("rvol","—"))+'x</b>'+extra+'<hr>Entry: <b>$'+str(r.get("entry","—"))+'</b><br>Stop: <b>$'+str(r.get("stop","—"))+'</b><br>T1: <b>$'+str(r.get("t1","—"))+'</b><br>T2: <b>$'+str(r.get("t2","—"))+'</b><br>Risk/share: <b>$'+format(risk,'.2f')+'</b><br>Max shares @ $5 risk: <b>'+str(shares)+'</b></div>',unsafe_allow_html=True)
 
-day,swing,analytics,news=st.tabs(["⚡ Day Trades","📆 Swing Trades","📊 Analytics","📰 News & Catalysts"])
+day,swing,analytics,backtest,news=st.tabs(["⚡ Day Trades","📆 Swing Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
 with day:setups(s.get("day",[]),"Top Day Trade Setups",True)
 with swing:setups(s.get("swing",[]),"Top Swing Trade Setups")
 with analytics:
