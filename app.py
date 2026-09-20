@@ -59,6 +59,16 @@ if sectors:
         show=[x for x in ["rank","sector","etf","state","intraday_pct","rs_vs_spy","above_vwap","ema_bull","rvol","strength_score"] if x in sdf]
         st.dataframe(sdf[show],use_container_width=True,hide_index=True)
     st.caption("Day-trading strength combines performance since the open, relative strength vs SPY, VWAP, EMA8/21 trend and intraday volume participation. It is context, not a buy signal.")
+
+swing_secs=snap.get("swing_sectors",[])
+if swing_secs:
+    st.subheader("📈 Swing Trading Sector Strength")
+    ssdf=pd.DataFrame(swing_secs)
+    fig=px.bar(ssdf.sort_values("strength_score"),x="strength_score",y="sector",orientation="h",text="state",hover_data=["etf","week_pct","month_pct","rs20_vs_spy","ema_trend"])
+    fig.update_layout(height=390,margin=dict(l=10,r=10,t=10,b=10),xaxis_title="Swing Strength Score",yaxis_title="")
+    st.plotly_chart(fig,use_container_width=True)
+    st.dataframe(ssdf[[x for x in ["rank","sector","etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend","strength_score"] if x in ssdf]],use_container_width=True,hide_index=True)
+    st.caption("Swing strength combines 5-day and 20-day momentum, 20-day relative strength versus SPY and EMA8/21/50 trend structure.")
 scan=s.get("scanner",{})
 if scan:
     st.markdown('<div class="card"><b>Dynamic Market Scanner</b><br><span class="muted">Scanned <b>'+str(scan.get("listed_symbols","—"))+'</b> U.S.-listed symbols → <b>'+str(scan.get("passed_filters","—"))+'</b> passed liquidity/momentum filters → <b>'+str(scan.get("intraday_scanned","—"))+'</b> received intraday analysis → Top <b>'+str(scan.get("day_displayed","—"))+'</b> Day / <b>'+str(scan.get("swing_displayed","—"))+'</b> Swing displayed. Major-index setups: Day <b>'+str(scan.get("day_major_index","—"))+'</b>, Swing <b>'+str(scan.get("swing_major_index","—"))+'</b> (target up to 30 each).</span></div>',unsafe_allow_html=True)
@@ -97,7 +107,7 @@ def setups(rows,title,day_mode=False):
     right.markdown('<div class="card"><b>'+str(r.ticker)+'</b> · <span class="status">'+str(r.get("status",""))+'</span><hr>Setup: <b>'+str(r.get("setup",""))+'</b><br>Score: <b>'+str(r.get("score",""))+'/100</b><br>RVOL: <b>'+str(r.get("rvol","—"))+'x</b>'+extra+'<hr>Entry: <b>$'+str(r.get("entry","—"))+'</b><br>Stop: <b>$'+str(r.get("stop","—"))+'</b><br>T1: <b>$'+str(r.get("t1","—"))+'</b><br>T2: <b>$'+str(r.get("t2","—"))+'</b><br>Risk/share: <b>$'+format(risk,'.2f')+'</b><br>Max shares @ $15 risk / $1,500 cash: <b>'+str(shares)+'</b></div>',unsafe_allow_html=True)
 
 day,quality,swing,spyopt,paper,analytics,backtest,news=st.tabs(["⚡ Day Trades","🧭 Advanced Day Trader","📆 Swing Trades","🎯 SPY Options AI","📝 Paper Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
-with day:setups(s.get("day",[]),"Top 40 Day Trade Setups",True)
+with day:setups(s.get("day",[]),"Top 50 Day Trade Setups",True)
 with quality:
     st.markdown("## 🧭 Advanced Day Trader")
     st.caption("Session-aware A+ setup engine • Premarket → Opening → Midday → Power Hour → Close • Paper/research mode")
@@ -163,7 +173,7 @@ with quality:
             fig.update_layout(height=390,xaxis=dict(range=[0,100],title="Pass"),margin=dict(l=5,r=5,t=20,b=5),paper_bgcolor="#0d1b2d",plot_bgcolor="#0d1b2d",font_color="#cbd7e6")
             st.plotly_chart(fig,use_container_width=True)
 
-with swing:setups(s.get("swing",[]),"Top 40 Swing Trade Setups")
+with swing:setups(s.get("swing",[]),"Top 50 Swing Trade Setups")
 with spyopt:
     st.subheader("🎯 SPY Options AI — Multi-Agent Analysis")
     ai=s.get("spy_ai",{})
