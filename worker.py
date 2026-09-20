@@ -238,15 +238,15 @@ def news():
 
 def main():
     global U
-    broad=load_universe()
+    # Fast dashboard refresh: do not enumerate the full U.S. market here.
+    # Broad discovery belongs in a separate, less-frequent process.
     major=load_major_index_members()
-    # Fast refresh path: use the liquid major-index core plus the repo fallback universe.
-    # Full-market discovery is intentionally kept out of the 5-minute snapshot job.
     fallback=[x.strip().upper() for x in UNIVERSE_FILE.read_text().splitlines() if x.strip() and not x.startswith("#")]
-    candidates=list(dict.fromkeys(fallback))[:80]
+    broad=list(dict.fromkeys(fallback))
+    candidates=broad[:40]
     major_candidates=list(major)
     U=["SPY","QQQ"]+list(dict.fromkeys([x for x in major_candidates if x not in ("SPY","QQQ")]+[x for x in candidates if x not in ("SPY","QQQ")]))
-    print("fast snapshot:",len(candidates),"fallback +",len(major_candidates),"major candidates; listed universe",len(broad))
+    print("fast dashboard snapshot:",len(candidates),"fallback +",len(major_candidates),"major candidates")
     d=yf.download(U,period="4mo",interval="1d",group_by="ticker",threads=True,progress=False)
     # prepost=False prevents extended-hours prints from contaminating ORB/VWAP/RVOL.
     i=yf.download(U,period="5d",interval="5m",group_by="ticker",prepost=False,threads=True,progress=False)
