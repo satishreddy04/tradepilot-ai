@@ -7,7 +7,6 @@ on:
       - "worker.py"
       - "spy_agents.py"
       - "universe.txt"
-      - "app.py"
       - "requirements.txt"
       - "backtest.py"
       - ".github/workflows/refresh.yml"
