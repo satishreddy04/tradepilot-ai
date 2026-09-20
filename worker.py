@@ -7,6 +7,53 @@ import requests
 from spy_agents import build_spy_agents
 
 UNIVERSE_FILE=Path("universe.txt")
+MAJOR_FALLBACK={"AAPL","MSFT","NVDA","AMZN","META","GOOGL","GOOG","AVGO","TSLA","AMD","NFLX","COST","PLTR","CSCO","TMUS","LIN","INTU","AMAT","TXN","QCOM","PEP","AMGN","HON","IBM","JPM","V","WMT","UNH","GS","CAT","HD","MCD","AXP","CRM","BA","DIS","KO","JNJ","PG","MRK"}
+SECTOR_ETFS={"Technology":"XLK","Financials":"XLF","Communication":"XLC","Consumer Discretionary":"XLY","Industrials":"XLI","Health Care":"XLV","Energy":"XLE","Consumer Staples":"XLP","Utilities":"XLU","Real Estate":"XLRE","Materials":"XLB"}
+
+def load_major_index_members():
+    """S&P 500 + Nasdaq-100 + Dow members, with a liquid large-cap fallback."""
+    out=set(MAJOR_FALLBACK)
+    try:
+        tables=pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
+        out.update(tables[0]["Symbol"].astype(str).str.replace(".","-",regex=False))
+    except Exception as e: print("sp500 members",e)
+    try:
+        for tb in pd.read_html("https://en.wikipedia.org/wiki/Nasdaq-100"):
+            col=next((x for x in ("Ticker","Symbol") if x in tb.columns),None)
+            if col and len(tb)>=80: out.update(tb[col].astype(str).str.replace(".","-",regex=False)); break
+    except Exception as e: print("nasdaq100 members",e)
+    try:
+        for tb in pd.read_html("https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"):
+            col=next((x for x in ("Symbol","Ticker") if x in tb.columns),None)
+            if col and 25<=len(tb)<=40: out.update(tb[col].astype(str).str.replace(".","-",regex=False)); break
+    except Exception as e: print("dow members",e)
+    return {x.strip().upper() for x in out if isinstance(x,str) and x.strip()}
+
+def pick_40(rows,major):
+    ranked=sorted(rows,key=lambda x:(x.get("score",0),x.get("rvol") or 0),reverse=True)
+    major_rows=[x for x in ranked if x.get("ticker") in major][:30]
+    chosen=list(major_rows); used={x["ticker"] for x in chosen}
+    chosen.extend([x for x in ranked if x.get("ticker") not in used][:40-len(chosen)])
+    return chosen[:40],len(major_rows)
+
+def sector_strength():
+    out=[]
+    try:
+        syms=list(SECTOR_ETFS.values())+["SPY"]
+        z=yf.download(syms,period="1mo",interval="1d",group_by="ticker",threads=True,progress=False)
+        spy=z["SPY"].dropna(); spy5=(float(spy.Close.iloc[-1])/float(spy.Close.iloc[-6])-1)*100 if len(spy)>=6 else 0
+        for name,t in SECTOR_ETFS.items():
+            g=z[t].dropna()
+            if len(g)<6: continue
+            d1=(float(g.Close.iloc[-1])/float(g.Close.iloc[-2])-1)*100
+            d5=(float(g.Close.iloc[-1])/float(g.Close.iloc[-6])-1)*100
+            rs=d5-spy5; score=round(d1*.35+d5*.35+rs*.30,2)
+            out.append({"sector":name,"etf":t,"day_pct":round(d1,2),"week_pct":round(d5,2),"rs_vs_spy":round(rs,2),"strength_score":score})
+        out.sort(key=lambda x:x["strength_score"],reverse=True)
+        for n,x in enumerate(out): x["rank"]=n+1;x["state"]="STRONG" if n<3 else ("WEAK" if n>=len(out)-3 else "NEUTRAL")
+    except Exception as e: print("sector strength",e)
+    return out
+
 
 def load_universe():
     symbols=[]
@@ -206,8 +253,10 @@ def news():
 def main():
     global U
     broad=load_universe()
+    major=load_major_index_members()
     candidates=discover_candidates(broad)
-    U=["SPY","QQQ"]+[x for x in candidates if x not in ("SPY","QQQ")]
+    # Always analyze major-index members too; quality rules still decide whether they display.
+    U=["SPY","QQQ"]+list(dict.fromkeys([x for x in candidates if x not in ("SPY","QQQ")]+[x for x in major if x not in ("SPY","QQQ")]))
     print("dynamic discovery:",len(broad),"listed ->",len(candidates),"intraday candidates")
     d=yf.download(U,period="4mo",interval="1d",group_by="ticker",threads=True,progress=False)
     # prepost=False prevents extended-hours prints from contaminating ORB/VWAP/RVOL.
@@ -222,9 +271,17 @@ def main():
             x=swing_setup(t,d[t])
             if x:swing.append(x)
         except Exception as e:print("swing",t,e)
-    day=sorted(day,key=lambda x:(x["score"],x["rvol"] or 0),reverse=True)[:25]
-    swing=sorted(swing,key=lambda x:(x["score"],x["rvol"] or 0),reverse=True)[:25]
+    day,day_major_count=pick_40(day,major)
+    swing,swing_major_count=pick_40(swing,major)
     m=regime(d)
+    sectors=sector_strength()
+    # Populate the isolated Advanced quality engine from the same analyzed universe.
+    for t in [x for x in U if x not in ("SPY","QQQ")]:
+        try:
+            q=quality_setup(t,i[t],i["SPY"],m)
+            if q: quality.append(q)
+        except Exception as e: print("quality",t,e)
+    quality=sorted(quality,key=lambda x:(x.get("session_score",0),x.get("rvol") or 0),reverse=True)[:40]
     news_items=news()
     try:
         spy_daily=d["SPY"].dropna()
@@ -235,7 +292,7 @@ def main():
             spy_ai["market_data_status"]="LATEST AVAILABLE SESSION"
     except Exception as e:
         print("spy agents",e); spy_ai={"error":str(e)[:180],"market_data_status":"UNAVAILABLE"}
-    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"day_displayed":len(day),"swing_displayed":len(swing),"dynamic":True},"market":m,"day":day,"swing":swing,"quality":quality,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
+    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"day_displayed":len(day),"swing_displayed":len(swing),"day_major_index":day_major_count,"swing_major_index":swing_major_count,"target_major_index":30,"dynamic":True},"market":m,"sectors":sectors,"day":day,"swing":swing,"quality":quality,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
     OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(snap,separators=(",",":")))
     # Paper journal: open a simulated trade on a new CONFIRMED day signal and track stop/T1/T2.
     try: journal=json.loads(JOURNAL.read_text()) if JOURNAL.exists() else []
