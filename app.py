@@ -84,9 +84,47 @@ def setups(rows,title,day_mode=False):
         extra="<br>VWAP: <b>$"+str(r.get("vwap","—"))+"</b><br>ORB H/L: <b>$"+str(r.get("orb_high","—"))+" / $"+str(r.get("orb_low","—"))+"</b>"
     right.markdown('<div class="card"><b>'+str(r.ticker)+'</b> · <span class="status">'+str(r.get("status",""))+'</span><hr>Setup: <b>'+str(r.get("setup",""))+'</b><br>Score: <b>'+str(r.get("score",""))+'/100</b><br>RVOL: <b>'+str(r.get("rvol","—"))+'x</b>'+extra+'<hr>Entry: <b>$'+str(r.get("entry","—"))+'</b><br>Stop: <b>$'+str(r.get("stop","—"))+'</b><br>T1: <b>$'+str(r.get("t1","—"))+'</b><br>T2: <b>$'+str(r.get("t2","—"))+'</b><br>Risk/share: <b>$'+format(risk,'.2f')+'</b><br>Max shares @ $15 risk / $1,500 cash: <b>'+str(shares)+'</b></div>',unsafe_allow_html=True)
 
-day,swing,paper,analytics,backtest,news=st.tabs(["⚡ Day Trades","📆 Swing Trades","📝 Paper Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
+day,swing,spyopt,paper,analytics,backtest,news=st.tabs(["⚡ Day Trades","📆 Swing Trades","🎯 SPY Options AI","📝 Paper Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
 with day:setups(s.get("day",[]),"Top Day Trade Setups",True)
 with swing:setups(s.get("swing",[]),"Top Swing Trade Setups")
+with spyopt:
+    st.subheader("🎯 SPY Options AI — Multi-Agent Analysis")
+    ai=s.get("spy_ai",{})
+    if not ai:
+        st.info("Waiting for the next scanner run to build SPY agent analysis.")
+    else:
+        dec=ai.get("decision",{}); tech=ai.get("technical",{}); risk=ai.get("risk",{})
+        x1,x2,x3,x4=st.columns(4)
+        x1.metric("SPY",f"$"+str(ai.get("price","—")));x2.metric("Regime",ai.get("regime","—"));x3.metric("State",dec.get("state","—"));x4.metric("Direction",dec.get("direction","WAIT"))
+        st.caption("Paper analysis only. CALL/PUT is a rules-based directional bias, not an options order.")
+        a1,a2,a3=st.columns(3)
+        with a1:
+            st.markdown("#### 📈 Technical Agent")
+            st.metric("Technical score",f'{tech.get("score","—")}/100')
+            st.write(f"EMA 8 / 21 / 50: {tech.get('ema8','—')} / {tech.get('ema21','—')} / {tech.get('ema50','—')}")
+            st.write(f"VWAP: {tech.get('vwap','—')} · RSI: {tech.get('rsi','—')} · ATR: {tech.get('atr','—')}")
+            st.write("MACD:", "Bullish" if tech.get("macd_bullish") else "Bearish")
+        with a2:
+            st.markdown("#### 📰 News Agent")
+            st.write(ai.get("news",{}).get("status","—"))
+            st.write("SPY news items:",ai.get("news",{}).get("items",0))
+            st.markdown("#### 💬 Social Agent")
+            st.write(ai.get("social",{}).get("status","—"))
+        with a3:
+            st.markdown("#### 🛡️ Risk Agent")
+            st.metric("Max planned risk",f"$"+str(risk.get("max_planned_risk",15)))
+            st.write("BLOCKED" if risk.get("blocked") else "PASS")
+            st.write(risk.get("reason",""))
+            st.metric("Decision confidence",f'{dec.get("confidence","—")}/100')
+        b1,b2=st.columns(2)
+        with b1:
+            st.markdown("#### 🐂 Bull Agent")
+            for z in ai.get("bull_case",[]):st.write("•",z)
+        with b2:
+            st.markdown("#### 🐻 Bear Agent")
+            for z in ai.get("bear_case",[]):st.write("•",z)
+        st.info("News/social LLM scoring is intentionally disabled until dedicated source/API credentials are configured; TradePilot will not invent sentiment.")
+
 with paper:
     st.subheader("Paper Trade Journal")
     jp=Path("docs/data/journal.json")
