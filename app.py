@@ -81,6 +81,33 @@ with analytics:
     cc[0].metric("Bullish watchlist",a.get("bullish_count",0));cc[1].metric("Bearish watchlist",a.get("bearish_count",0))
     cc=st.columns(2)
     cc[0].metric("Day confirmed",a.get("day_confirmed",0));cc[1].metric("Swing ready+",a.get("swing_ready",0))
+with backtest:
+    st.subheader("Historical Strategy Backtest")
+    bp=Path("docs/data/backtest.json")
+    if not bp.exists():
+        st.error("Backtest data file is not available yet.")
+    else:
+        bt=json.loads(bp.read_text())
+        bs=bt.get("summary",{})
+        trades=pd.DataFrame(bt.get("trades",[]))
+        st.caption("Research simulation only — historical results are not a forecast.")
+        a1,a2,a3=st.columns(3)
+        a1.metric("Starting Balance",f"$"+format(float(bs.get("starting_equity",0)),",.2f"))
+        a2.metric("Ending Balance",f"$"+format(float(bs.get("ending_equity",0)),",.2f"))
+        a3.metric("Net P&L",f"$"+format(float(bs.get("net_pnl",0)),",.2f"))
+        b1,b2,b3=st.columns(3)
+        b1.metric("Trades",bs.get("trades",0))
+        b2.metric("Win Rate",f'{bs.get("win_rate",0)}%')
+        b3.metric("Profit Factor",bs.get("profit_factor","—"))
+        st.metric("Max Drawdown",f"$"+format(float(bs.get("max_drawdown_dollars",0)),",.2f"))
+        if not trades.empty:
+            fig=go.Figure(go.Scatter(x=list(range(1,len(trades)+1)),y=trades["equity"],mode="lines"))
+            fig.update_layout(title="Equity Curve",height=350,margin=dict(l=5,r=5,t=45,b=5),paper_bgcolor="#0d1b2d",plot_bgcolor="#0d1b2d",font_color="#cbd7e6")
+            st.plotly_chart(fig,use_container_width=True)
+            wanted=[x for x in ["date","ticker","entry","stop","exit","reason","shares","pnl","equity"] if x in trades.columns]
+            st.dataframe(trades[wanted].iloc[::-1],use_container_width=True,hide_index=True,height=430)
+        st.warning("This first backtest is preliminary. Some historical trades exceed a $500 account's realistic buying power because of extremely tight stops. We will correct position sizing before evaluating the strategy.")
+
 with news:
     if not s.get("news"):st.info("No current catalysts in snapshot.")
     for n in s.get("news",[])[:30]:
