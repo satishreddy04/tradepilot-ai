@@ -87,8 +87,8 @@ def setups(rows,title,day_mode=False):
 day,quality,swing,spyopt,paper,analytics,backtest,news=st.tabs(["⚡ Day Trades","🧭 Advanced Day Trader","📆 Swing Trades","🎯 SPY Options AI","📝 Paper Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
 with day:setups(s.get("day",[]),"Top Day Trade Setups",True)
 with quality:
-    st.subheader("🧭 Advanced Day Trader")
-    st.caption("Session-aware research workflow • Premarket → Opening → Midday → Power Hour → Close • Existing Day Trades scanner remains unchanged.")
+    st.markdown("## 🧭 Advanced Day Trader")
+    st.caption("Session-aware A+ setup engine • Premarket → Opening → Midday → Power Hour → Close • Paper/research mode")
     qr=s.get("quality",[])
     if not qr:
         st.info("Building the Advanced Day Trader snapshot. The next successful scanner run will populate this page.")
@@ -96,8 +96,11 @@ with quality:
         qdf=pd.DataFrame(qr)
         phases=["🌅 Premarket","🔔 Opening","☀️ Midday","⚡ Power Hour","🏁 Close"]
         active=str(qdf.iloc[0].get("phase","OPENING")).replace("_"," ")
-        st.markdown("### "+"  →  ".join(phases))
-        st.info("Active engine: "+active+" • Each session uses a different confirmation checklist. A+ is a research signal, not an automatic order.")
+        pc=st.columns(5)
+        for col,p in zip(pc,phases):
+            with col:
+                st.info(p + (" • ACTIVE" if active in p.upper() else ""))
+        st.success("Active engine: "+active+" • Session-specific confirmation rules are active.")
         show=[x for x in ["ticker","session_score","session_state","phase","price","rvol","relative_strength","extension_pct","market_aligned"] if x in qdf]
         def qstyle(row):
             state=str(row.get("session_state",row.get("quality_state","")))
@@ -105,18 +108,28 @@ with quality:
             if state=="CONFIRMED":return ["background-color:#173653;color:#8ED0FF;font-weight:700" for _ in row]
             if state=="READY":return ["background-color:#44370d;color:#FFE082;font-weight:700" for _ in row]
             return ["" for _ in row]
+        m1,m2,m3,m4=st.columns(4)
+        m1.metric("Active Engine",active);m2.metric("Candidates",len(qdf));m3.metric("Snapshot",str(s.get("generated_at","—"))[11:19]+" UTC");m4.metric("Mode","PAPER")
+        st.markdown("### Top Candidates")
         st.dataframe(qdf[show].style.apply(qstyle,axis=1),use_container_width=True,hide_index=True,height=min(520,72+35*min(len(qdf),12)))
         qt=st.selectbox("Inspect A+ candidate",qdf.ticker.tolist(),key="quality-inspect")
         q=qdf[qdf.ticker==qt].iloc[0]
         k1,k2,k3,k4=st.columns(4)
         k1.metric("Quality",f'{q.get("quality_score",0)}/100');k2.metric("Grade",q.get("grade","—"));k3.metric("State",q.get("quality_state","—"));k4.metric("RS vs SPY",f'{q.get("relative_strength",0)}%')
         checks=q.get("session_checks",q.get("checks",{})); checks=checks if isinstance(checks,dict) else {}
-        left,right=st.columns([1.25,1])
+        left,center,right=st.columns([1.05,1.7,1.05])
         with left:
             st.markdown("#### Confirmation checklist")
             for name,ok in checks.items():st.write(("✅" if ok else "❌"),name)
+        with center:
+            st.markdown("#### Selected Setup")
+            st.metric("Ticker",qt)
+            st.metric("Session score",str(q.get("session_score",q.get("quality_score",0)))+"/100")
+            st.write("State **"+str(q.get("session_state",q.get("quality_state","WATCH")))+"**")
+            st.write("Phase **"+str(q.get("phase","—"))+"**")
+            st.write("Market aligned **"+("YES" if q.get("market_aligned") else "NO")+"**")
         with right:
-            st.markdown("#### Trade plan")
+            st.markdown("#### Trade Plan")
             st.write(f"Entry **${q.get('entry','—')}** · Stop **${q.get('stop','—')}**")
             st.write(f"1R **${q.get('t1_1r','—')}** · 2R **${q.get('t2_2r','—')}**")
             st.write(f"Shares **{q.get('shares',0)}** · Planned risk **${q.get('planned_risk',0)}**")
@@ -124,6 +137,13 @@ with quality:
             if not q.get("no_chase",True):st.error("SKIP / WAIT — price is extended more than 0.5% above the ORB trigger.")
             elif q.get("quality_state")=="A+ CONFIRMED":st.success("A+ CONFIRMED — eligible for paper-trade review; not an automatic order.")
             else:st.warning("Not A+ yet — wait for missing confirmations.")
+        st.markdown("### Session Statistics")
+        z1,z2,z3,z4=st.columns(4)
+        z1.metric("Candidates",len(qdf))
+        z2.metric("A+ Confirmed",int(qdf["session_state"].astype(str).str.contains("A+",regex=False).sum()) if "session_state" in qdf else 0)
+        z3.metric("Ready",int((qdf["session_state"]=="READY").sum()) if "session_state" in qdf else 0)
+        avg_rvol=float(qdf["rvol"].fillna(0).mean()) if "rvol" in qdf else 0
+        z4.metric("Avg RVOL",format(avg_rvol,".2f")+"x")
         vals=[{"check":k,"value":100 if v else 0} for k,v in checks.items()]
         if vals:
             vf=pd.DataFrame(vals)
