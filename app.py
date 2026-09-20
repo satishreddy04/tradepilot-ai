@@ -57,7 +57,7 @@ with left_sec:
     st.caption("Since market open • vs SPY • VWAP • EMA8/21 • RVOL")
     if sectors:
         dsec=pd.DataFrame(sectors).sort_values("strength_score",ascending=True)
-        fig=px.bar(dsec,x="strength_score",y="sector",orientation="h",text="state",hover_data=["etf","intraday_pct","rs_vs_spy","above_vwap","ema_bull","rvol"])
+        fig=px.bar(dsec,x="strength_score",y="sector",orientation="h",text="state",hover_data=[x for x in ["etf","intraday_pct","rs_vs_spy","above_vwap","ema_bull","rvol"] if x in dsec.columns])
         fig.update_traces(textposition="inside")
         fig.update_layout(height=420,margin=dict(l=5,r=10,t=5,b=5),xaxis_title="",yaxis_title="",showlegend=False)
         st.plotly_chart(fig,use_container_width=True)
@@ -70,7 +70,7 @@ with right_sec:
     st.caption("5-day & 20-day momentum • vs SPY • EMA8/21/50 • Swing score")
     if swing_secs:
         ssec=pd.DataFrame(swing_secs).sort_values("strength_score",ascending=True)
-        fig2=px.bar(ssec,x="strength_score",y="sector",orientation="h",text="strength_score",hover_data=["etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend"])
+        fig2=px.bar(ssec,x="strength_score",y="sector",orientation="h",text="strength_score",hover_data=[x for x in ["etf","state","week_pct","month_pct","rs20_vs_spy","ema_trend"] if x in ssec.columns])
         fig2.update_traces(textposition="inside")
         fig2.update_layout(height=420,margin=dict(l=5,r=10,t=5,b=5),xaxis_title="",yaxis_title="",showlegend=False)
         st.plotly_chart(fig2,use_container_width=True)
