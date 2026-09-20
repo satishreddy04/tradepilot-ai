@@ -20,7 +20,7 @@ def pick_40(rows,major):
     major_rows=[x for x in ranked if x.get("ticker") in major][:30]
     chosen=list(major_rows); used={x["ticker"] for x in chosen}
     chosen.extend([x for x in ranked if x.get("ticker") not in used][:40-len(chosen)])
-    return chosen[:40],len(major_rows)
+    # Up to 30 major-index setups plus 20 broader-market setups = Top 50.\n    broader=[x for x in ranked if x.get("ticker") not in major][:20]\n    chosen=list(major_rows)+broader\n    used={x["ticker"] for x in chosen}\n    chosen.extend([x for x in ranked if x.get("ticker") not in used][:50-len(chosen)])\n    return chosen[:50],len([x for x in chosen[:50] if x.get("ticker") in major])
 
 def sector_strength():
     """Rank sectors for day trading using intraday leadership, trend and participation."""
@@ -257,6 +257,31 @@ def news():
         except:pass
     return out[:20]
 
+def swing_sector_strength():
+    """Rank sectors for swing trading using 1d/5d/20d momentum, SPY-relative strength and EMA trend."""
+    out=[]
+    try:
+        syms=list(SECTOR_ETFS.values())+["SPY"]
+        z=yf.download(syms,period="3mo",interval="1d",group_by="ticker",threads=True,progress=False,timeout=20)
+        spy=z["SPY"].dropna()
+        spy20=(float(spy.Close.iloc[-1])/float(spy.Close.iloc[-21])-1)*100 if len(spy)>=21 else 0
+        for name,t in SECTOR_ETFS.items():
+            g=z[t].dropna()
+            if len(g)<21: continue
+            close=g.Close.astype(float); p=float(close.iloc[-1])
+            d1=(p/float(close.iloc[-2])-1)*100; d5=(p/float(close.iloc[-6])-1)*100; d20=(p/float(close.iloc[-21])-1)*100
+            rs20=d20-spy20
+            e8=float(close.ewm(span=8,adjust=False).mean().iloc[-1]); e21=float(close.ewm(span=21,adjust=False).mean().iloc[-1]); e50=float(close.ewm(span=50,adjust=False).mean().iloc[-1])
+            trend=p>e8>e21 and (len(close)<50 or e21>e50)
+            score=50 + max(-12,min(12,d5*2)) + max(-18,min(18,rs20*2.5)) + max(-8,min(8,d20*.5)) + (12 if trend else -12)
+            score=round(max(0,min(100,score)),1)
+            out.append({"sector":name,"etf":t,"day_pct":round(d1,2),"week_pct":round(d5,2),"month_pct":round(d20,2),"rs20_vs_spy":round(rs20,2),"ema_trend":trend,"strength_score":score})
+        out.sort(key=lambda x:x["strength_score"],reverse=True)
+        for n,x in enumerate(out):
+            x["rank"]=n+1; x["state"]="STRONG" if x["strength_score"]>=65 else ("WEAK" if x["strength_score"]<40 else "NEUTRAL")
+    except Exception as e: print("swing sector strength",e,flush=True)
+    return out
+
 def main():
     global U
     # Fast dashboard refresh: do not enumerate the full U.S. market here.
@@ -291,6 +316,8 @@ def main():
     print("STEP sectors",flush=True)
     sectors=sector_strength()
     print("STEP sectors done",len(sectors),flush=True)
+    swing_sectors=swing_sector_strength()
+    print("STEP swing sectors done",len(swing_sectors),flush=True)
     # Populate the isolated Advanced quality engine from the same analyzed universe.
     for t in [x for x in U if x not in ("SPY","QQQ")]:
         try:
@@ -312,7 +339,7 @@ def main():
     except Exception as e:
         print("spy agents",e); spy_ai={"error":str(e)[:180],"market_data_status":"UNAVAILABLE"}
     print("STEP spy agents done",flush=True)
-    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"scan_mode":"FAST SNAPSHOT","day_displayed":len(day),"swing_displayed":len(swing),"day_major_index":day_major_count,"swing_major_index":swing_major_count,"target_major_index":30,"dynamic":True},"market":m,"sectors":sectors,"day":day,"swing":swing,"quality":quality,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
+    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"scan_mode":"FAST SNAPSHOT","day_displayed":len(day),"swing_displayed":len(swing),"day_major_index":day_major_count,"swing_major_index":swing_major_count,"target_major_index":30,"dynamic":True},"market":m,"sectors":sectors,"swing_sectors":swing_sectors,"day":day,"swing":swing,"quality":quality,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
     OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(snap,separators=(",",":")))
     # Paper journal: open a simulated trade on a new CONFIRMED day signal and track stop/T1/T2.
     try: journal=json.loads(JOURNAL.read_text()) if JOURNAL.exists() else []
