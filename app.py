@@ -84,19 +84,23 @@ def setups(rows,title,day_mode=False):
         extra="<br>VWAP: <b>$"+str(r.get("vwap","—"))+"</b><br>ORB H/L: <b>$"+str(r.get("orb_high","—"))+" / $"+str(r.get("orb_low","—"))+"</b>"
     right.markdown('<div class="card"><b>'+str(r.ticker)+'</b> · <span class="status">'+str(r.get("status",""))+'</span><hr>Setup: <b>'+str(r.get("setup",""))+'</b><br>Score: <b>'+str(r.get("score",""))+'/100</b><br>RVOL: <b>'+str(r.get("rvol","—"))+'x</b>'+extra+'<hr>Entry: <b>$'+str(r.get("entry","—"))+'</b><br>Stop: <b>$'+str(r.get("stop","—"))+'</b><br>T1: <b>$'+str(r.get("t1","—"))+'</b><br>T2: <b>$'+str(r.get("t2","—"))+'</b><br>Risk/share: <b>$'+format(risk,'.2f')+'</b><br>Max shares @ $15 risk / $1,500 cash: <b>'+str(shares)+'</b></div>',unsafe_allow_html=True)
 
-day,quality,swing,spyopt,paper,analytics,backtest,news=st.tabs(["⚡ Day Trades","⭐ A+ Day Trade","📆 Swing Trades","🎯 SPY Options AI","📝 Paper Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
+day,quality,swing,spyopt,paper,analytics,backtest,news=st.tabs(["⚡ Day Trades","🧭 Advanced Day Trader","📆 Swing Trades","🎯 SPY Options AI","📝 Paper Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
 with day:setups(s.get("day",[]),"Top Day Trade Setups",True)
 with quality:
-    st.subheader("⭐ A+ Day Trade Quality")
-    st.caption("Research layer only — it does not change the existing Day Trades scanner.")
+    st.subheader("🧭 Advanced Day Trader")
+    st.caption("Session-aware research workflow • Premarket → Opening → Midday → Power Hour → Close • Existing Day Trades scanner remains unchanged.")
     qr=s.get("quality",[])
     if not qr:
-        st.info("Waiting for the next scanner snapshot to build A+ quality setups.")
+        st.info("Building the Advanced Day Trader snapshot. The next successful scanner run will populate this page.")
     else:
         qdf=pd.DataFrame(qr)
-        show=[x for x in ["ticker","quality_score","grade","quality_state","price","rvol","relative_strength","extension_pct","market_aligned"] if x in qdf]
+        phases=["🌅 Premarket","🔔 Opening","☀️ Midday","⚡ Power Hour","🏁 Close"]
+        active=str(qdf.iloc[0].get("phase","OPENING")).replace("_"," ")
+        st.markdown("### "+"  →  ".join(phases))
+        st.info("Active engine: "+active+" • Each session uses a different confirmation checklist. A+ is a research signal, not an automatic order.")
+        show=[x for x in ["ticker","session_score","session_state","phase","price","rvol","relative_strength","extension_pct","market_aligned"] if x in qdf]
         def qstyle(row):
-            state=str(row.get("quality_state",""))
+            state=str(row.get("session_state",row.get("quality_state","")))
             if "A+" in state:return ["background-color:#123d2a;color:#7CFFB2;font-weight:700" for _ in row]
             if state=="CONFIRMED":return ["background-color:#173653;color:#8ED0FF;font-weight:700" for _ in row]
             if state=="READY":return ["background-color:#44370d;color:#FFE082;font-weight:700" for _ in row]
@@ -106,7 +110,7 @@ with quality:
         q=qdf[qdf.ticker==qt].iloc[0]
         k1,k2,k3,k4=st.columns(4)
         k1.metric("Quality",f'{q.get("quality_score",0)}/100');k2.metric("Grade",q.get("grade","—"));k3.metric("State",q.get("quality_state","—"));k4.metric("RS vs SPY",f'{q.get("relative_strength",0)}%')
-        checks=q.get("checks",{}) if isinstance(q.get("checks",{}),dict) else {}
+        checks=q.get("session_checks",q.get("checks",{})); checks=checks if isinstance(checks,dict) else {}
         left,right=st.columns([1.25,1])
         with left:
             st.markdown("#### Confirmation checklist")
