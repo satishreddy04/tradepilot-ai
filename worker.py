@@ -5,7 +5,7 @@ import pandas as pd
 import yfinance as yf
 import requests
 
-U="SPY QQQ NVDA AMD PLTR ANET AVGO ARM SMCI CRWD NET MU TSLA META AMZN GOOGL APP HOOD COIN RKLB VRT DELL MRVL CLS ALAB TGTX BE".split()
+UNIVERSE_FILE=Path("universe.txt")\nU=[x.strip().upper() for x in UNIVERSE_FILE.read_text().splitlines() if x.strip() and not x.startswith("#")]\nfor benchmark in ("SPY","QQQ"):\n    if benchmark not in U: U.insert(0,benchmark)
 OUT=Path("docs/data/snapshot.json")
 
 def num(x):
@@ -93,7 +93,7 @@ def regime(d):
             g=ind(d[t]);r=g.iloc[-1];ok=bool(r.Close>r.e8>r.e21>r.e50);bull+=int(ok);vals[t.lower()]={"price":num(r.Close),"bullish":ok}
         except:vals[t.lower()]={}
     breadth=[]
-    for t in U[2:]:
+    for t in [x for x in U if x not in ("SPY","QQQ")]:
         try:g=ind(d[t]);r=g.iloc[-1];breadth.append(bool(r.Close>r.e21))
         except:pass
     b=round(100*sum(breadth)/len(breadth)) if breadth else 50;score=round(bull/2*60+b*.4)
@@ -115,7 +115,7 @@ def main():
     # prepost=False prevents extended-hours prints from contaminating ORB/VWAP/RVOL.
     i=yf.download(U,period="5d",interval="5m",group_by="ticker",prepost=False,threads=True,progress=False)
     day=[];swing=[]
-    for t in U[2:]:
+    for t in [x for x in U if x not in ("SPY","QQQ")]:
         try:
             x=day_setup(t,i[t])
             if x:day.append(x)
