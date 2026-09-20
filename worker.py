@@ -15,12 +15,18 @@ def load_major_index_members():
     return set(MAJOR_FALLBACK)
 
 def pick_40(rows,major):
+    """Build Top 50 with a balanced target: 25 major-index + 25 broader-market qualified setups."""
     ranked=sorted(rows,key=lambda x:(x.get("score",0),x.get("rvol") or 0),reverse=True)
-    for x in ranked: x["universe"]="MAJOR INDEX" if x.get("ticker") in major else "BROADER MARKET"
-    major_rows=[x for x in ranked if x.get("ticker") in major][:30]
-    chosen=list(major_rows); used={x["ticker"] for x in chosen}
-    chosen.extend([x for x in ranked if x.get("ticker") not in used][:40-len(chosen)])
-    # Up to 30 major-index setups plus 20 broader-market setups = Top 50.\n    broader=[x for x in ranked if x.get("ticker") not in major][:20]\n    chosen=list(major_rows)+broader\n    used={x["ticker"] for x in chosen}\n    chosen.extend([x for x in ranked if x.get("ticker") not in used][:50-len(chosen)])\n    return chosen[:50],len([x for x in chosen[:50] if x.get("ticker") in major])
+    for x in ranked:
+        x["universe"]="MAJOR INDEX" if x.get("ticker") in major else "BROADER MARKET"
+    major_rows=[x for x in ranked if x.get("ticker") in major][:25]
+    broader_rows=[x for x in ranked if x.get("ticker") not in major][:25]
+    chosen=major_rows+broader_rows
+    used={x["ticker"] for x in chosen}
+    # Fill only when one side has fewer than 25 qualifying setups; never fabricate a setup.
+    chosen.extend([x for x in ranked if x.get("ticker") not in used][:50-len(chosen)])
+    chosen=sorted(chosen[:50],key=lambda x:(x.get("score",0),x.get("rvol") or 0),reverse=True)
+    return chosen,len([x for x in chosen if x.get("ticker") in major])
 
 def sector_strength():
     """Rank sectors for day trading using intraday leadership, trend and participation."""
