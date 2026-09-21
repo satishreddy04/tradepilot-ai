@@ -136,6 +136,20 @@ with quality:
         st.info("Building the Advanced Day Trader snapshot. The next successful scanner run will populate this page.")
     else:
         qdf=pd.DataFrame(qr)
+        # Action layer: translate setup state into a clear paper-trade decision.
+        def trade_action(row):
+            state=str(row.get("session_state",row.get("quality_state","WATCH")))
+            phase=str(row.get("phase",""))
+            price=float(row.get("price") or 0); entry=float(row.get("entry") or 0); stop=float(row.get("stop") or 0)
+            ext=((price/entry)-1)*100 if entry>0 else 999
+            if stop>0 and price<=stop: return "🔴 INVALID"
+            if entry<=0: return "🟡 WAIT"
+            if ext>0.50: return "🚫 TOO LATE / CHASE"
+            if phase=="CLOSE" and state in ("CONFIRMED","A+ CONFIRMED"): return "🔵 TRIGGERED EARLIER"
+            if state in ("CONFIRMED","A+ CONFIRMED") and -0.10<=ext<=0.50: return "🟢 ENTER NOW"
+            if state=="READY" or (-0.50<=ext< -0.10): return "🟡 WAIT"
+            return "🟡 WAIT"
+        qdf["action"]=qdf.apply(trade_action,axis=1)
         phases=["🌅 Premarket","🔔 Opening","☀️ Midday","⚡ Power Hour","🏁 Close"]
         active=str(qdf.iloc[0].get("phase","OPENING")).replace("_"," ")
         pc=st.columns(5)
@@ -143,7 +157,7 @@ with quality:
             with col:
                 st.info(p + (" • ACTIVE" if active in p.upper() else ""))
         st.success("Active engine: "+active+" • Session-specific confirmation rules are active.")
-        show=[x for x in ["ticker","session_score","session_state","phase","price","rvol","relative_strength","extension_pct","market_aligned"] if x in qdf]
+        show=[x for x in ["ticker","action","session_score","session_state","phase","price","entry","stop","t1_1r","t2_2r","shares","planned_risk","rvol","relative_strength","extension_pct"] if x in qdf]
         def qstyle(row):
             state=str(row.get("session_state",row.get("quality_state","")))
             if "A+" in state:return ["background-color:#123d2a;color:#7CFFB2;font-weight:700" for _ in row]
@@ -176,9 +190,12 @@ with quality:
             st.write(f"1R **${q.get('t1_1r','—')}** · 2R **${q.get('t2_2r','—')}**")
             st.write(f"Shares **{q.get('shares',0)}** · Planned risk **${q.get('planned_risk',0)}**")
             st.write(f"RVOL **{q.get('rvol','—')}x** · Extension **{q.get('extension_pct','—')}%**")
-            if not q.get("no_chase",True):st.error("SKIP / WAIT — price is extended more than 0.5% above the ORB trigger.")
-            elif q.get("quality_state")=="A+ CONFIRMED":st.success("A+ CONFIRMED — eligible for paper-trade review; not an automatic order.")
-            else:st.warning("Not A+ yet — wait for missing confirmations.")
+            action=trade_action(q)
+            if action.startswith("🟢"): st.success("🟢 ENTER NOW — fresh confirmed trigger near the planned entry. PAPER MODE: use the displayed stop and share size.")
+            elif action.startswith("🚫"): st.error("🚫 TOO LATE / CHASE — price is more than 0.5% beyond the planned entry. Do not chase.")
+            elif action.startswith("🔴"): st.error("🔴 INVALID — price is at/below the setup stop. Setup failed.")
+            elif action.startswith("🔵"): st.info("🔵 TRIGGERED EARLIER — confirmation happened earlier in the session; this is not a fresh entry.")
+            else: st.warning("🟡 WAIT — setup is developing. Wait for the trigger/confirmation instead of entering early.")
         st.markdown("### Session Statistics")
         z1,z2,z3,z4=st.columns(4)
         z1.metric("Candidates",len(qdf))
