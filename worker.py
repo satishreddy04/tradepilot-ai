@@ -167,6 +167,7 @@ def day_setup(t,g):
     near=p>=orb_high*.995
     # READY must also have usable volume evidence. Missing/zero RVOL is WATCH only.
     ready=trend and above_vwap and near and rv is not None and rv>=1.0
+    watch_candidate=trend and above_vwap and near and rv is not None and rv>0
     score=(25 if trend else 0)+(20 if above_vwap else 0)+(25 if vol_ok else 12 if rv is not None and rv>=1 else 0)+(30 if p>orb_high else 15 if near else 0)
     entry=orb_high
     supports=[float(orb_low)]
