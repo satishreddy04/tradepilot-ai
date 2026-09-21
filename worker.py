@@ -96,14 +96,9 @@ def discover_candidates(symbols, limit=100):
                 e8=float(close.ewm(span=8,adjust=False).mean().iloc[-1]); e21=float(close.ewm(span=21,adjust=False).mean().iloc[-1]); e50=float(close.ewm(span=50,adjust=False).mean().iloc[-1])
                 adr=float((((g.High-g.Low)/close)*100).tail(20).mean()); momentum=(p/e21-1) if e21 else 0
                 if p>=3 and av>=500000 and dollar>=15000000 and adr>=2 and p>e8>e21>e50:
-                    # Market-cap is checked only after the inexpensive price/liquidity/trend filters.
-                    # If Yahoo cannot return it, reject the symbol rather than pretending it passed.
-                    try:
-                        cap=float(yf.Ticker(t).fast_info.get("market_cap") or 0)
-                    except Exception:
-                        cap=0
-                    if cap>=300_000_000:
-                        keep.append((t,momentum,adr,dollar))
+                    # Keep discovery fast. Market-cap validation is done only for the
+                    # small final candidate set, not one Yahoo request per U.S. symbol.
+                    keep.append((t,momentum,adr,dollar))
             except Exception: pass
     keep.sort(key=lambda z:(z[1],z[2],z[3]),reverse=True)
     return [x[0] for x in keep[:limit]]
@@ -343,7 +338,16 @@ def main():
     major=load_major_index_members()
     fallback=[x.strip().upper() for x in UNIVERSE_FILE.read_text().splitlines() if x.strip() and not x.startswith("#")]
     broad=list(dict.fromkeys(fallback))
-    candidates=discover_candidates(broad,limit=100)
+    candidates=discover_candidates(broad,limit=80)
+    # Validate the $300M market-cap rule only after technical/liquidity discovery.
+    cap_ok=[]
+    for t in candidates:
+        try:
+            cap=float(yf.Ticker(t).fast_info.get("market_cap") or 0)
+            if cap>=300_000_000: cap_ok.append(t)
+        except Exception:
+            pass
+    candidates=cap_ok
     # Keep major-index leaders in the analysis set even when they are not in universe.txt;
     # swing_setup still rejects names that do not meet the requested rules.
     major_candidates=list(major)
