@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
+import requests
 
 st.set_page_config(page_title="TradePilot AI",page_icon="📈",layout="wide")
 st.markdown("""<style>
@@ -25,8 +26,19 @@ st.markdown("""<style>
 </style>""",unsafe_allow_html=True)
 
 p=Path("docs/data/snapshot.json")
-try:s=json.loads(p.read_text())
-except:s={"generated_at":None,"market":{"label":"WAITING FOR SCAN","score":50},"day":[],"swing":[],"news":[],"analytics":{}}
+LIVE_BASE="https://raw.githubusercontent.com/satishreddy04/tradepilot-ai/main/docs/data/"
+def load_live_json(name, fallback_path):
+    """Prefer latest GitHub-generated data; local deployed file is fallback only."""
+    try:
+        r=requests.get(LIVE_BASE+name+"?ts="+str(int(datetime.now(timezone.utc).timestamp())),timeout=4,headers={"Cache-Control":"no-cache"})
+        r.raise_for_status()
+        return r.json(),"LIVE GITHUB"
+    except Exception:
+        try:return json.loads(fallback_path.read_text()),"DEPLOYED FALLBACK"
+        except:return {}, "UNAVAILABLE"
+
+s,data_source=load_live_json("snapshot.json",p)
+if not s:s={"generated_at":None,"market":{"label":"WAITING FOR SCAN","score":50},"day":[],"swing":[],"news":[],"analytics":{}}
 m=s.get("market",{})
 
 def snapshot_age_minutes(v):
@@ -38,8 +50,8 @@ def snapshot_age_minutes(v):
 
 snapshot_age=snapshot_age_minutes(s.get("generated_at"))
 ap=Path("docs/data/advanced.json")
-try: advanced=json.loads(ap.read_text())
-except: advanced={"generated_at":None,"quality":[],"status":"WAITING"}
+advanced,advanced_source=load_live_json("advanced.json",ap)
+if not advanced: advanced={"generated_at":None,"quality":[],"status":"WAITING"}
 advanced_age=snapshot_age_minutes(advanced.get("generated_at"))
 
 def short_time(v):
@@ -59,6 +71,7 @@ r2=st.columns(3)
 r2[0].metric("SPY",m.get("spy",{}).get("price","—"))
 r2[1].metric("QQQ",m.get("qqq",{}).get("price","—"))
 r2[2].metric("Snapshot",short_time(s.get("generated_at")))
+st.caption("Data source: "+data_source+" • Advanced: "+advanced_source)
 
 if snapshot_age is None:
     st.error("🔴 NO LIVE SNAPSHOT — do not use Day Trade entries until fresh data is available.")
@@ -150,8 +163,7 @@ with day:
     setups(s.get("day",[]),"Top Day Trade Setups",True)
     st.markdown("### Signal Tracker — persists across refreshes")
     sp=Path("docs/data/signals.json")
-    try: sb=json.loads(sp.read_text()) if sp.exists() else {}
-    except: sb={}
+    sb,signal_source=load_live_json("signals.json",sp)
     sr=list((sb.get("signals") or {}).values())
     if sr:
         sdf=pd.DataFrame(sr)
