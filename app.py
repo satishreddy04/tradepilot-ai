@@ -127,7 +127,20 @@ def setups(rows,title,day_mode=False):
     right.markdown('<div class="card"><b>'+str(r.ticker)+'</b> · <span class="status">'+str(r.get("status",""))+'</span><hr>Setup: <b>'+str(r.get("setup",""))+'</b><br>Score: <b>'+str(r.get("score",""))+'/100</b><br>RVOL: <b>'+str(r.get("rvol","—"))+'x</b>'+extra+'<hr>Entry: <b>$'+str(r.get("entry","—"))+'</b><br>Stop: <b>$'+str(r.get("stop","—"))+'</b><br>T1: <b>$'+str(r.get("t1","—"))+'</b><br>T2: <b>$'+str(r.get("t2","—"))+'</b><br>Risk/share: <b>$'+format(risk,'.2f')+'</b><br>Max shares @ $15 risk / $1,500 cash: <b>'+str(shares)+'</b></div>',unsafe_allow_html=True)
 
 day,quality,swing,spyopt,paper,analytics,backtest,news=st.tabs(["⚡ Day Trades","🧭 Advanced Day Trader","📆 Swing Trades","🎯 SPY Options AI","📝 Paper Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
-with day:setups(s.get("day",[]),"Top Day Trade Setups",True)
+with day:
+    setups(s.get("day",[]),"Top Day Trade Setups",True)
+    st.markdown("### Signal Tracker — persists across refreshes")
+    sp=Path("docs/data/signals.json")
+    try: sb=json.loads(sp.read_text()) if sp.exists() else {}
+    except: sb={}
+    sr=list((sb.get("signals") or {}).values())
+    if sr:
+        sdf=pd.DataFrame(sr)
+        wanted=[x for x in ["ticker","state","price","entry","stop","t1","t2","score","rvol","first_seen_at","triggered_at","last_seen_at"] if x in sdf.columns]
+        st.dataframe(sdf[wanted].sort_values("last_seen_at",ascending=False),use_container_width=True,hide_index=True)
+        st.caption("Signals remain here for the trading session. ENTER NOW is a fresh trigger; MISSED / CHASE and NO LONGER ACTIONABLE are not fresh entries.")
+    else:
+        st.info("No persisted day signals yet for this session.")
 with quality:
     st.markdown("## 🧭 Advanced Day Trader")
     st.caption("Session-aware A+ setup engine • Premarket → Opening → Midday → Power Hour → Close • Paper/research mode")
