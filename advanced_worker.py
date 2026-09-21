@@ -12,9 +12,12 @@ def main():
     snap=json.loads(SNAP.read_text()) if SNAP.exists() else {}
     rows=snap.get("day",[])
     symbols=[]
-    for x in sorted(rows,key=lambda z:(z.get("score",0),z.get("rvol") or 0),reverse=True):
-        t=x.get("ticker")
-        if t and t not in symbols: symbols.append(t)
+    # Advanced Day Trader must analyze the same candidates shown in Day Trades.
+    # Preserve snapshot order/status instead of silently replacing the candidate set.
+    for row in rows:
+        t=row.get("ticker")
+        if t and t not in symbols:
+            symbols.append(t)
         if len(symbols)>=20: break
     if not symbols:
         OUT.parent.mkdir(parents=True,exist_ok=True)
@@ -31,7 +34,19 @@ def main():
             q=quality_setup(t,x[t],x["SPY"],m)
             if q: quality.append(q)
         except Exception as e: print("ADV",t,repr(e),flush=True)
-    quality=sorted(quality,key=lambda z:(z.get("session_score",0),z.get("rvol") or 0),reverse=True)[:20]
+    # Keep every core Day Trades candidate visible in Advanced, even when the
+    # advanced confirmation layer says WAIT/TOO LATE. This prevents a ticker
+    # (for example AMAT) from disappearing between tabs.
+    by_ticker={q.get("ticker"):q for q in quality}
+    ordered=[]
+    for row in rows:
+        t=row.get("ticker")
+        q=by_ticker.get(t)
+        if not q: continue
+        q["core_status"]=row.get("status")
+        q["core_score"]=row.get("score")
+        ordered.append(q)
+    quality=ordered[:20]
     OUT.parent.mkdir(parents=True,exist_ok=True)
     OUT.write_text(json.dumps({"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"source_snapshot":snap.get("generated_at"),"quality":quality,"status":"OK"},separators=(",",":")))
     print("ADV done",len(quality),flush=True)
