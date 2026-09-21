@@ -130,17 +130,33 @@ def setups(rows,title,day_mode=False):
     if not rows:
         st.info("Waiting for the next market-data snapshot.");return
     df=pd.DataFrame(rows)
-    cols=[x for x in ["ticker","universe","price","score","rvol","setup","status","entry","stop","t1","t2","risk_share"] if x in df]
+    def day_action(r):
+        status=str(r.get("status","")).upper()
+        price=float(r.get("price") or 0); entry=float(r.get("entry") or 0); stop=float(r.get("stop") or 0)
+        if snapshot_age is None or snapshot_age>5:return "⚫ STALE DATA — WAIT"
+        if stop>0 and price<=stop:return "🔴 INVALID / STOP LOST"
+        if status=="TOO LATE / CHASE":return "🟠 MISSED / CHASE"
+        if status=="CONFIRMED":return "🟢 CONFIRMED — ENTER NOW"
+        if status=="READY":return "🟡 READY — WAIT FOR TRIGGER"
+        return "🔵 WATCH — MONITOR"
+    if day_mode: df["action"]=df.apply(day_action,axis=1)
+    cols=[x for x in ["ticker","action","universe","price","score","rvol","setup","status","entry","stop","t1","t2","risk_share"] if x in df]
     view=df[cols].copy()
     def status_style(row):
-        status=str(row.get("status","")).upper()
-        if status=="CONFIRMED":
-            return ["background-color:#123d2a;color:#7CFFB2;font-weight:700" for _ in row]
-        if status=="READY":
-            return ["background-color:#44370d;color:#FFE082;font-weight:700" for _ in row]
+        action=str(row.get("action","")).upper(); status=str(row.get("status","")).upper()
+        if "ENTER NOW" in action:return ["background-color:#123d2a;color:#7CFFB2;font-weight:700" for _ in row]
+        if "READY" in action:return ["background-color:#44370d;color:#FFE082;font-weight:700" for _ in row]
+        if "WATCH" in action:return ["background-color:#102d4a;color:#8ED0FF;font-weight:700" for _ in row]
+        if "MISSED" in action:return ["background-color:#4a2d0d;color:#FFB86B;font-weight:700" for _ in row]
+        if "INVALID" in action:return ["background-color:#481b24;color:#FF8A9A;font-weight:700" for _ in row]
+        if "STALE" in action:return ["background-color:#30343b;color:#D0D5DD;font-weight:700" for _ in row]
+        if status=="CONFIRMED":return ["background-color:#123d2a;color:#7CFFB2;font-weight:700" for _ in row]
+        if status=="READY":return ["background-color:#44370d;color:#FFE082;font-weight:700" for _ in row]
         return ["" for _ in row]
     styled=view.style.apply(status_style,axis=1)
     st.dataframe(styled,use_container_width=True,hide_index=True,height=min(560,72+35*min(len(df),14)))
+    if day_mode:
+        st.caption("🟢 ENTER NOW = confirmed + fresh • 🟡 READY = wait for trigger • 🔵 WATCH = monitor only • 🟠 MISSED = do not chase • 🔴 INVALID = setup failed • ⚫ STALE = wait for fresh data")
     t=st.selectbox("Inspect setup",df.ticker.tolist(),key=title)
     r=df[df.ticker==t].iloc[0]
     cd=r.get("chart",[])
