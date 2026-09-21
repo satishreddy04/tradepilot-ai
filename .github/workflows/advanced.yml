@@ -1,0 +1,36 @@
+name: Refresh Advanced Day Trader
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "advanced_worker.py"
+      - "worker.py"
+      - "requirements.txt"
+      - ".github/workflows/advanced.yml"
+  schedule:
+    - cron: "0,10,20,30,40,50 11-20 * * 1-5"
+concurrency:
+  group: tradepilot-advanced
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  advanced:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python advanced_worker.py
+      - run: |
+          git config user.name tradepilot-bot
+          git config user.email tradepilot-bot@users.noreply.github.com
+          git add docs/data/advanced.json
+          git diff --cached --quiet || git commit -m 'data: refresh advanced snapshot'
+          git pull --rebase origin main
+          git push origin HEAD:main
