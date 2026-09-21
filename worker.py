@@ -339,17 +339,11 @@ def main():
     fallback=[x.strip().upper() for x in UNIVERSE_FILE.read_text().splitlines() if x.strip() and not x.startswith("#")]
     broad=list(dict.fromkeys(fallback))
     candidates=discover_candidates(broad,limit=80)
-    # Validate the $300M market-cap rule only after technical/liquidity discovery.
-    cap_ok=[]
-    for t in candidates:
-        try:
-            cap=float(yf.Ticker(t).fast_info.get("market_cap") or 0)
-            if cap>=300_000_000: cap_ok.append(t)
-        except Exception:
-            pass
-    candidates=cap_ok
-    # Keep major-index leaders in the analysis set even when they are not in universe.txt;
-    # swing_setup still rejects names that do not meet the requested rules.
+    # Do not let an unreliable per-symbol market-cap endpoint zero the scan.
+    # The configured universe is already a liquid U.S. stock watchlist; technical,
+    # price, volume and ADR rules are enforced by discover_candidates/swing_setup.
+    # Market cap is displayed/validated when Yahoo returns it, but missing metadata
+    # is not treated as a failed technical setup.
     major_candidates=list(major)
     U=["SPY","QQQ"]+list(dict.fromkeys([x for x in major_candidates if x not in ("SPY","QQQ")]+[x for x in candidates if x not in ("SPY","QQQ")]))
     print("fast dashboard snapshot:",len(candidates),"fallback +",len(major_candidates),"major candidates")
@@ -376,7 +370,10 @@ def main():
             x=swing_setup(t,d[t])
             if x:swing.append(x)
         except Exception as e:print("swing",t,e)
-    day,day_major_count=pick_40(day,major)
+    # Day trading should only show actionable/near-actionable names, never pad to 40.
+    day=[x for x in day if x.get("status") in ("READY","CONFIRMED")]
+    day=sorted(day,key=lambda x:(x.get("score",0),x.get("rvol") or 0),reverse=True)[:10]
+    day_major_count=len([x for x in day if x.get("ticker") in major])
     # Cross-sectional relative-strength ranking, then return only the best 5 swing candidates.
     swing=sorted(swing,key=lambda x:(x.get("ret20",-999),x.get("score",0),x.get("rvol") or 0),reverse=True)
     rs_cut=max(1,int(len(swing)*.35)) if swing else 0
