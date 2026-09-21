@@ -165,7 +165,8 @@ def day_setup(t,g):
     above_vwap=p>vwap
     confirmed=len(today)>3 and p>orb_high and trend and above_vwap and vol_ok
     near=p>=orb_high*.995
-    ready=trend and above_vwap and near
+    # READY must also have usable volume evidence. Missing/zero RVOL is WATCH only.
+    ready=trend and above_vwap and near and rv is not None and rv>=1.0
     score=(25 if trend else 0)+(20 if above_vwap else 0)+(25 if vol_ok else 12 if rv is not None and rv>=1 else 0)+(30 if p>orb_high else 15 if near else 0)
     entry=orb_high
     structural=max(orb_low,vwap)
