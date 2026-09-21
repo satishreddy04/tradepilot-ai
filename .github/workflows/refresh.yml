@@ -15,9 +15,9 @@ on:
     - cron: "30,45 12 * * 1-5"
     - cron: "0,5,10,15,20,25,30,35,40,45,50,55 13-20 * * 1-5"
 concurrency:
-  group: tradepilot-refresh
-  # A scheduled run should not cancel a just-started push refresh and leave the
-  # dashboard stuck on the previous snapshot.
+  # Keep code-triggered and scheduled refreshes separate. A scheduled refresh
+  # must never block the deployment/refresh caused by a code push.
+  group: tradepilot-refresh-${{ github.event_name == 'schedule' && 'schedule' || github.run_id }}
   cancel-in-progress: false
 permissions:
   contents: write
@@ -41,7 +41,7 @@ jobs:
       - run: |
           git config user.name tradepilot-bot
           git config user.email tradepilot-bot@users.noreply.github.com
-          git add docs/data/snapshot.json docs/data/state.json docs/data/journal.json
+          git add docs/data/snapshot.json docs/data/state.json docs/data/journal.json docs/data/signals.json
           git diff --cached --quiet || git commit -m 'data: refresh snapshot and backtest'
           # A code/UI push can land while this scanner run is executing.
           # Rebase the generated-data commit onto the latest main before pushing.
@@ -51,5 +51,16 @@ jobs:
             echo "worker.py changed while this run was executing; skip stale snapshot push."
             exit 0
           fi
-          git pull --rebase origin main
+          # Generated JSON files are intentionally last-writer-wins. Rebase can
+          # conflict when two scanner runs update the same snapshot/state files.
+          # Refresh onto latest main, then restore this run's generated files.
+          mkdir -p /tmp/tradepilot-data
+          cp docs/data/snapshot.json /tmp/tradepilot-data/snapshot.json
+          cp docs/data/state.json /tmp/tradepilot-data/state.json
+          cp docs/data/journal.json /tmp/tradepilot-data/journal.json
+          cp docs/data/signals.json /tmp/tradepilot-data/signals.json
+          git reset --hard origin/main
+          cp /tmp/tradepilot-data/*.json docs/data/
+          git add docs/data/snapshot.json docs/data/state.json docs/data/journal.json docs/data/signals.json
+          git diff --cached --quiet || git commit -m 'data: refresh live scanner'
           git push origin HEAD:main
