@@ -84,6 +84,10 @@ with st.expander("Open / close sector strength dashboard", expanded=True):
 
 scan=s.get("scanner",{})
 if scan:
+    session=scan.get("data_session")
+    stale_n=scan.get("stale_rejected",0)
+    if session:
+        st.caption(f"Market data session: {session} • Price mode: {scan.get('price_mode','RAW')} • Stale/mismatched symbols rejected: {stale_n}")
     st.markdown('<div class="card"><b>Dynamic Market Scanner</b><br><span class="muted">Scanned <b>'+str(scan.get("listed_symbols","—"))+'</b> U.S.-listed symbols → <b>'+str(scan.get("passed_filters","—"))+'</b> passed liquidity/momentum filters → <b>'+str(scan.get("intraday_scanned","—"))+'</b> received intraday analysis → Top <b>'+str(scan.get("day_displayed","—"))+'</b> Day / <b>'+str(scan.get("swing_displayed","—"))+'</b> Swing displayed. Major-index setups: Day <b>'+str(scan.get("day_major_index","—"))+'</b>, Swing <b>'+str(scan.get("swing_major_index","—"))+'</b> (target 25 Major Index + 25 Broader Market each; shortages are filled only by qualified setups).</span></div>',unsafe_allow_html=True)
 
 def setups(rows,title,day_mode=False):
