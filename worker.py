@@ -169,9 +169,12 @@ def day_setup(t,g):
     ready=trend and above_vwap and near and rv is not None and rv>=1.0
     score=(25 if trend else 0)+(20 if above_vwap else 0)+(25 if vol_ok else 12 if rv is not None and rv>=1 else 0)+(30 if p>orb_high else 15 if near else 0)
     entry=orb_high
-    structural=max(orb_low,vwap)
-    stop=min(entry-.01,structural)
-    risk=max(.01,entry-stop)
+    supports=[float(orb_low)]
+    if pd.notna(vwap) and float(vwap)<entry: supports.append(float(vwap))
+    structural=max(supports)
+    min_risk=max(entry*0.0025,0.05)
+    stop=min(structural,entry-min_risk)
+    risk=max(min_risk,entry-stop)
     t1=entry+risk
     t2=entry+2*risk
     extension_pct=(p/entry-1)*100 if entry else 0
@@ -234,7 +237,12 @@ def quality_setup(t,g,spy_g,market):
     else:
         if len(reg)<3:return
         orb=reg.iloc[:3]; orb_high=float(orb.High.max()); orb_low=float(orb.Low.min())
-        entry=orb_high; structural=max(orb_low,vwap); stop=min(entry-.01,structural)
+        entry=orb_high
+        supports=[float(orb_low)]
+        if pd.notna(vwap) and float(vwap)<entry: supports.append(float(vwap))
+        structural=max(supports)
+        min_risk=max(entry*0.0025,0.05)
+        stop=min(structural,entry-min_risk)
         extension=(p/entry-1)*100 if entry else 0; no_chase=extension<=0.5
         close_confirm=len(reg)>3 and p>orb_high
         recent_vol=float(reg.Volume.iloc[-4:-1].mean()) if len(reg)>=4 else 0
@@ -386,8 +394,12 @@ def main():
             if x:swing.append(x)
         except Exception as e:print("swing",t,e)
     # Day trading should only show actionable/near-actionable names, never pad to 40.
-    day=[x for x in day if x.get("status") in ("READY","CONFIRMED","TOO LATE / CHASE")]
-    day=sorted(day,key=lambda x:(x.get("score",0),x.get("rvol") or 0),reverse=True)[:10]
+    actionable=[x for x in day if x.get("status") in ("READY","CONFIRMED","TOO LATE / CHASE")]
+    watch=[x for x in day if x.get("status")=="WATCH" and (x.get("rvol") or 0)>0]
+    actionable=sorted(actionable,key=lambda x:(x.get("score",0),x.get("rvol") or 0),reverse=True)
+    watch=sorted(watch,key=lambda x:(x.get("score",0),x.get("rvol") or 0),reverse=True)
+    # Always keep a useful scanner list. WATCH rows are context only and never entries.
+    day=(actionable+watch)[:10]
     day_major_count=len([x for x in day if x.get("ticker") in major])
 
     # Persist intraday signal lifecycle across scanner refreshes. A setup must not
