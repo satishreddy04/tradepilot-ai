@@ -127,7 +127,7 @@ def setups(rows,title,day_mode=False):
     right.markdown('<div class="card"><b>'+str(r.ticker)+'</b> · <span class="status">'+str(r.get("status",""))+'</span><hr>Setup: <b>'+str(r.get("setup",""))+'</b><br>Score: <b>'+str(r.get("score",""))+'/100</b><br>RVOL: <b>'+str(r.get("rvol","—"))+'x</b>'+extra+'<hr>Entry: <b>$'+str(r.get("entry","—"))+'</b><br>Stop: <b>$'+str(r.get("stop","—"))+'</b><br>T1: <b>$'+str(r.get("t1","—"))+'</b><br>T2: <b>$'+str(r.get("t2","—"))+'</b><br>Risk/share: <b>$'+format(risk,'.2f')+'</b><br>Max shares @ $15 risk / $1,500 cash: <b>'+str(shares)+'</b></div>',unsafe_allow_html=True)
 
 day,quality,swing,spyopt,paper,analytics,backtest,news=st.tabs(["⚡ Day Trades","🧭 Advanced Day Trader","📆 Swing Trades","🎯 SPY Options AI","📝 Paper Trades","📊 Analytics","🧪 Backtest","📰 News & Catalysts"])
-with day:setups(s.get("day",[]),"Top 50 Day Trade Setups",True)
+with day:setups(s.get("day",[]),"Top Day Trade Setups",True)
 with quality:
     st.markdown("## 🧭 Advanced Day Trader")
     st.caption("Session-aware A+ setup engine • Premarket → Opening → Midday → Power Hour → Close • Paper/research mode")
@@ -210,7 +210,7 @@ with quality:
             fig.update_layout(height=390,xaxis=dict(range=[0,100],title="Pass"),margin=dict(l=5,r=5,t=20,b=5),paper_bgcolor="#0d1b2d",plot_bgcolor="#0d1b2d",font_color="#cbd7e6")
             st.plotly_chart(fig,use_container_width=True)
 
-with swing:setups(s.get("swing",[]),"Top 50 Swing Trade Setups")
+with swing:setups(s.get("swing",[]),"Best Swing Trade Setups")
 with spyopt:
     st.subheader("🎯 SPY Options AI — Multi-Agent Analysis")
     ai=s.get("spy_ai",{})
