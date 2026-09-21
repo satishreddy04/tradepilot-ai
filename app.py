@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
@@ -28,9 +28,19 @@ p=Path("docs/data/snapshot.json")
 try:s=json.loads(p.read_text())
 except:s={"generated_at":None,"market":{"label":"WAITING FOR SCAN","score":50},"day":[],"swing":[],"news":[],"analytics":{}}
 m=s.get("market",{})
+
+def snapshot_age_minutes(v):
+    if not v:return None
+    try:
+        dt=datetime.fromisoformat(v.replace("Z","+00:00"))
+        return max(0,(datetime.now(timezone.utc)-dt.astimezone(timezone.utc)).total_seconds()/60)
+    except:return None
+
+snapshot_age=snapshot_age_minutes(s.get("generated_at"))
 ap=Path("docs/data/advanced.json")
 try: advanced=json.loads(ap.read_text())
 except: advanced={"generated_at":None,"quality":[],"status":"WAITING"}
+advanced_age=snapshot_age_minutes(advanced.get("generated_at"))
 
 def short_time(v):
     if not v:return "Not built"
@@ -49,6 +59,15 @@ r2=st.columns(3)
 r2[0].metric("SPY",m.get("spy",{}).get("price","—"))
 r2[1].metric("QQQ",m.get("qqq",{}).get("price","—"))
 r2[2].metric("Snapshot",short_time(s.get("generated_at")))
+
+if snapshot_age is None:
+    st.error("🔴 NO LIVE SNAPSHOT — do not use Day Trade entries until fresh data is available.")
+elif snapshot_age > 10:
+    st.error(f"🔴 STALE DATA — snapshot is {snapshot_age:.1f} minutes old. ENTER NOW is disabled; confirm live prices with your broker.")
+elif snapshot_age > 5:
+    st.warning(f"🟠 DATA AGE {snapshot_age:.1f} min — scanner is updating, but use caution for new entries.")
+else:
+    st.success(f"🟢 DATA FRESH — snapshot age {snapshot_age:.1f} min.")
 
 st.markdown('<div class="card"><b>Overall Market: '+str(m.get("label","UNKNOWN"))+'</b><br><span class="muted">Rules-based SPY/QQQ EMA structure + watchlist breadth; not a forecast.</span></div>',unsafe_allow_html=True)
 
@@ -159,6 +178,8 @@ with quality:
             if entry<=0: return "🟡 WAIT"
             if ext>0.50: return "🚫 TOO LATE / CHASE"
             if phase=="CLOSE" and state in ("CONFIRMED","A+ CONFIRMED"): return "🔵 TRIGGERED EARLIER"
+            if snapshot_age is None or snapshot_age>5: return "⏸️ STALE — WAIT"
+            if advanced_age is None or advanced_age>5: return "⏸️ STALE — WAIT"
             if state in ("CONFIRMED","A+ CONFIRMED") and -0.10<=ext<=0.50: return "🟢 ENTER NOW"
             if state=="READY" or (-0.50<=ext< -0.10): return "🟡 WAIT"
             return "🟡 WAIT"
@@ -208,6 +229,7 @@ with quality:
             elif action.startswith("🚫"): st.error("🚫 TOO LATE / CHASE — price is more than 0.5% beyond the planned entry. Do not chase.")
             elif action.startswith("🔴"): st.error("🔴 INVALID — price is at/below the setup stop. Setup failed.")
             elif action.startswith("🔵"): st.info("🔵 TRIGGERED EARLIER — confirmation happened earlier in the session; this is not a fresh entry.")
+            elif action.startswith("⏸️"): st.warning("⏸️ STALE — WAIT. The scanner snapshot is too old for a fresh entry signal.")
             else: st.warning("🟡 WAIT — setup is developing. Wait for the trigger/confirmation instead of entering early.")
         st.markdown("### Session Statistics")
         z1,z2,z3,z4=st.columns(4)
