@@ -307,9 +307,14 @@ def main():
     # prepost=False prevents extended-hours prints from contaminating ORB/VWAP/RVOL.
     print("STEP intraday download",flush=True)
     i=yf.download(U,period="5d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=False,threads=True,progress=False,timeout=20)
-    # Separate extended-hours feed for Advanced Day Trader only.
-    print("STEP advanced premarket download",flush=True)
-    ix=yf.download(U,period="5d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=True,threads=True,progress=False,timeout=20)
+    # Advanced feed: keep it small so Yahoo cannot stall the whole scanner.
+    # Use the highest-ranked day candidates plus SPY only.
+    adv_symbols=["SPY"]+[x for x in U if x not in ("SPY","QQQ")][:20]
+    print("STEP advanced premarket download",len(adv_symbols),flush=True)
+    try:
+        ix=yf.download(adv_symbols,period="2d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=True,threads=False,progress=False,timeout=8)
+    except Exception as e:
+        print("advanced premarket download failed",repr(e),flush=True); ix=pd.DataFrame()
     print("STEP advanced premarket done",flush=True)
     print("STEP intraday done",flush=True)
     day=[];swing=[];quality=[]
@@ -337,11 +342,14 @@ def main():
     swing_sectors=swing_sector_strength()
     print("STEP swing sectors done",len(swing_sectors),flush=True)
     # Populate the isolated Advanced quality engine from the same analyzed universe.
-    for t in [x for x in U if x not in ("SPY","QQQ")]:
-        try:
-            q=quality_setup(t,ix[t],ix["SPY"],m)
-            if q: quality.append(q)
-        except Exception as e: print("quality",t,e)
+    if not ix.empty:
+        for t in adv_symbols:
+            if t=="SPY": continue
+            try:
+                q=quality_setup(t,ix[t],ix["SPY"],m)
+                if q: quality.append(q)
+            except Exception as e: print("quality",t,e)
+    print("STEP advanced quality done",len(quality),flush=True)
     quality=sorted(quality,key=lambda x:(x.get("session_score",0),x.get("rvol") or 0),reverse=True)[:40]
     print("STEP news",flush=True)
     news_items=news()
