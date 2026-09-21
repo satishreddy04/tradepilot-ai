@@ -28,6 +28,9 @@ p=Path("docs/data/snapshot.json")
 try:s=json.loads(p.read_text())
 except:s={"generated_at":None,"market":{"label":"WAITING FOR SCAN","score":50},"day":[],"swing":[],"news":[],"analytics":{}}
 m=s.get("market",{})
+ap=Path("docs/data/advanced.json")
+try: advanced=json.loads(ap.read_text())
+except: advanced={"generated_at":None,"quality":[],"status":"WAITING"}
 
 def short_time(v):
     if not v:return "Not built"
@@ -128,7 +131,7 @@ with day:setups(s.get("day",[]),"Top 50 Day Trade Setups",True)
 with quality:
     st.markdown("## 🧭 Advanced Day Trader")
     st.caption("Session-aware A+ setup engine • Premarket → Opening → Midday → Power Hour → Close • Paper/research mode")
-    qr=s.get("quality",[])
+    qr=advanced.get("quality",[])
     if not qr:
         st.info("Building the Advanced Day Trader snapshot. The next successful scanner run will populate this page.")
     else:
@@ -148,7 +151,7 @@ with quality:
             if state=="READY":return ["background-color:#44370d;color:#FFE082;font-weight:700" for _ in row]
             return ["" for _ in row]
         m1,m2,m3,m4=st.columns(4)
-        m1.metric("Active Engine",active);m2.metric("Candidates",len(qdf));m3.metric("Snapshot",str(s.get("generated_at","—"))[11:19]+" UTC");m4.metric("Mode","PAPER")
+        m1.metric("Active Engine",active);m2.metric("Candidates",len(qdf));m3.metric("Snapshot",str(advanced.get("generated_at","—"))[11:19]+" UTC");m4.metric("Mode","PAPER")
         st.markdown("### Top Candidates")
         st.dataframe(qdf[show].style.apply(qstyle,axis=1),use_container_width=True,hide_index=True,height=min(520,72+35*min(len(qdf),12)))
         qt=st.selectbox("Inspect A+ candidate",qdf.ticker.tolist(),key="quality-inspect")
