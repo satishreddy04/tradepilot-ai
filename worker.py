@@ -307,15 +307,6 @@ def main():
     # prepost=False prevents extended-hours prints from contaminating ORB/VWAP/RVOL.
     print("STEP intraday download",flush=True)
     i=yf.download(U,period="5d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=False,threads=True,progress=False,timeout=20)
-    # Advanced feed: keep it small so Yahoo cannot stall the whole scanner.
-    # Use the highest-ranked day candidates plus SPY only.
-    adv_symbols=["SPY"]+[x for x in U if x not in ("SPY","QQQ")][:20]
-    print("STEP advanced premarket download",len(adv_symbols),flush=True)
-    try:
-        ix=yf.download(adv_symbols,period="2d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=True,threads=False,progress=False,timeout=8)
-    except Exception as e:
-        print("advanced premarket download failed",repr(e),flush=True); ix=pd.DataFrame()
-    print("STEP advanced premarket done",flush=True)
     print("STEP intraday done",flush=True)
     day=[];swing=[];quality=[]
     # Data-integrity guard: all symbols must come from the same latest regular session.
@@ -341,16 +332,6 @@ def main():
     print("STEP sectors done",len(sectors),flush=True)
     swing_sectors=swing_sector_strength()
     print("STEP swing sectors done",len(swing_sectors),flush=True)
-    # Populate the isolated Advanced quality engine from the same analyzed universe.
-    if not ix.empty:
-        for t in adv_symbols:
-            if t=="SPY": continue
-            try:
-                q=quality_setup(t,ix[t],ix["SPY"],m)
-                if q: quality.append(q)
-            except Exception as e: print("quality",t,e)
-    print("STEP advanced quality done",len(quality),flush=True)
-    quality=sorted(quality,key=lambda x:(x.get("session_score",0),x.get("rvol") or 0),reverse=True)[:40]
     print("STEP news",flush=True)
     news_items=news()
     print("STEP news done",len(news_items),flush=True)
@@ -365,7 +346,7 @@ def main():
     except Exception as e:
         print("spy agents",e); spy_ai={"error":str(e)[:180],"market_data_status":"UNAVAILABLE"}
     print("STEP spy agents done",flush=True)
-    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"scan_mode":"FAST SNAPSHOT","day_displayed":len(day),"swing_displayed":len(swing),"day_major_index":day_major_count,"swing_major_index":swing_major_count,"target_major_index":30,"dynamic":True,"data_session":str(spy_session) if spy_session else None,"stale_rejected":len(rejected_stale),"price_mode":"RAW / UNADJUSTED"},"market":m,"sectors":sectors,"swing_sectors":swing_sectors,"day":day,"swing":swing,"quality":quality,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
+    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"scan_mode":"FAST SNAPSHOT","day_displayed":len(day),"swing_displayed":len(swing),"day_major_index":day_major_count,"swing_major_index":swing_major_count,"target_major_index":30,"dynamic":True,"data_session":str(spy_session) if spy_session else None,"stale_rejected":len(rejected_stale),"price_mode":"RAW / UNADJUSTED"},"market":m,"sectors":sectors,"swing_sectors":swing_sectors,"day":day,"swing":swing,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
     OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(snap,separators=(",",":")))
     # Paper journal: open a simulated trade on a new CONFIRMED day signal and track stop/T1/T2.
     try: journal=json.loads(JOURNAL.read_text()) if JOURNAL.exists() else []
