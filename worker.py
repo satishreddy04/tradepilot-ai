@@ -306,7 +306,11 @@ def main():
     print("STEP daily done",flush=True)
     # prepost=False prevents extended-hours prints from contaminating ORB/VWAP/RVOL.
     print("STEP intraday download",flush=True)
-    i=yf.download(U,period="5d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=False,threads=True,progress=False,timeout=20)\n    # Separate extended-hours feed for Advanced Day Trader only. Normal Day Trades remains regular-session only.\n    print("STEP advanced premarket download",flush=True)\n    ix=yf.download(U,period="5d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=True,threads=True,progress=False,timeout=20)\n    print("STEP advanced premarket done",flush=True)
+    i=yf.download(U,period="5d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=False,threads=True,progress=False,timeout=20)
+    # Separate extended-hours feed for Advanced Day Trader only.
+    print("STEP advanced premarket download",flush=True)
+    ix=yf.download(U,period="5d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=True,threads=True,progress=False,timeout=20)
+    print("STEP advanced premarket done",flush=True)
     print("STEP intraday done",flush=True)
     day=[];swing=[];quality=[]
     # Data-integrity guard: all symbols must come from the same latest regular session.
