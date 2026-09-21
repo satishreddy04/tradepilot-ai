@@ -107,6 +107,7 @@ U=[]
 OUT=Path("docs/data/snapshot.json")
 STATE=Path("docs/data/state.json")
 JOURNAL=Path("docs/data/journal.json")
+SIGNALS=Path("docs/data/signals.json")
 
 def num(x):
     try:return None if pd.isna(x) else round(float(x),2)
@@ -387,6 +388,39 @@ def main():
     day=[x for x in day if x.get("status") in ("READY","CONFIRMED","TOO LATE / CHASE")]
     day=sorted(day,key=lambda x:(x.get("score",0),x.get("rvol") or 0),reverse=True)[:10]
     day_major_count=len([x for x in day if x.get("ticker") in major])
+
+    # Persist intraday signal lifecycle across scanner refreshes. A setup must not
+    # disappear just because it falls out of the latest top-N ranking.
+    now=datetime.now(timezone.utc).isoformat(timespec="seconds")
+    try: signal_book=json.loads(SIGNALS.read_text()) if SIGNALS.exists() else {}
+    except: signal_book={}
+    session_key=str(spy_session) if spy_session else now[:10]
+    if signal_book.get("session")!=session_key:
+        signal_book={"session":session_key,"signals":{}}
+    sigs=signal_book.setdefault("signals",{})
+    live={x["ticker"]:x for x in day}
+    for x in day:
+        t=x["ticker"]; old=sigs.get(t,{})
+        state=x.get("status","WATCH")
+        if state=="CONFIRMED": state="ENTER NOW"
+        if state=="TOO LATE / CHASE": state="MISSED / CHASE"
+        first=old.get("first_seen_at",now)
+        triggered=old.get("triggered_at")
+        if state=="ENTER NOW" and not triggered: triggered=now
+        sigs[t]={**old,"ticker":t,"setup":x.get("setup"),"state":state,
+                 "first_seen_at":first,"last_seen_at":now,"triggered_at":triggered,
+                 "entry":x.get("entry"),"stop":x.get("stop"),"t1":x.get("t1"),"t2":x.get("t2"),
+                 "price":x.get("price"),"rvol":x.get("rvol"),"score":x.get("score")}
+    # Update previously seen signals even if they are no longer in the current Top Day list.
+    for t,z in list(sigs.items()):
+        x=live.get(t)
+        if x: continue
+        if z.get("state") in ("ENTER NOW","ACTIVE TRADE","T1 HIT","READY"):
+            z["state"]="NO LONGER ACTIONABLE"
+            z["last_seen_at"]=now
+    SIGNALS.parent.mkdir(parents=True,exist_ok=True)
+    SIGNALS.write_text(json.dumps(signal_book,separators=(",",":")))
+
     # Cross-sectional relative-strength ranking, then return only the best 5 swing candidates.
     swing=sorted(swing,key=lambda x:(x.get("ret20",-999),x.get("score",0),x.get("rvol") or 0),reverse=True)
     rs_cut=max(1,int(len(swing)*.35)) if swing else 0
