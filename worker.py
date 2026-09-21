@@ -165,14 +165,27 @@ def day_setup(t,g):
     confirmed=len(today)>3 and p>orb_high and trend and above_vwap and vol_ok
     near=p>=orb_high*.995
     ready=trend and above_vwap and near
-    status="CONFIRMED" if confirmed else ("READY" if ready else "WATCH")
     score=(25 if trend else 0)+(20 if above_vwap else 0)+(25 if vol_ok else 12 if rv is not None and rv>=1 else 0)+(30 if p>orb_high else 15 if near else 0)
     entry=orb_high
     structural=max(orb_low,vwap)
     stop=min(entry-.01,structural)
     risk=max(.01,entry-stop)
+    t1=entry+risk
+    t2=entry+2*risk
+    extension_pct=(p/entry-1)*100 if entry else 0
+    # Keep the basic scanner consistent with Advanced Day Trader:
+    # a historical breakout is not a fresh entry after price is extended or T1 was reached.
+    too_late=bool(p>=t1 or extension_pct>0.5)
+    if confirmed and too_late:
+        status="TOO LATE / CHASE"
+    elif confirmed:
+        status="CONFIRMED"
+    elif ready and not too_late:
+        status="READY"
+    else:
+        status="WATCH"
     chart=[{"time":str(i),"open":num(x.Open),"high":num(x.High),"low":num(x.Low),"close":num(x.Close)} for i,x in today.tail(50).iterrows()]
-    return {"ticker":t,"price":num(p),"score":min(100,int(score)),"rvol":num(rv),"setup":"15m ORB + VWAP + RVOL","status":status,"entry":num(entry),"stop":num(stop),"t1":num(entry+1.5*risk),"t2":num(entry+2.5*risk),"risk_share":num(risk),"vwap":num(vwap),"orb_high":num(orb_high),"orb_low":num(orb_low),"chart":chart}
+    return {"ticker":t,"price":num(p),"score":min(100,int(score)),"rvol":num(rv),"setup":"15m ORB + VWAP + RVOL","status":status,"entry":num(entry),"stop":num(stop),"t1":num(t1),"t2":num(t2),"risk_share":num(risk),"extension_pct":round(extension_pct,2),"no_chase":not too_late,"vwap":num(vwap),"orb_high":num(orb_high),"orb_low":num(orb_low),"chart":chart}
 
 
 def quality_setup(t,g,spy_g,market):
@@ -371,7 +384,7 @@ def main():
             if x:swing.append(x)
         except Exception as e:print("swing",t,e)
     # Day trading should only show actionable/near-actionable names, never pad to 40.
-    day=[x for x in day if x.get("status") in ("READY","CONFIRMED")]
+    day=[x for x in day if x.get("status") in ("READY","CONFIRMED","TOO LATE / CHASE")]
     day=sorted(day,key=lambda x:(x.get("score",0),x.get("rvol") or 0),reverse=True)[:10]
     day_major_count=len([x for x in day if x.get("ticker") in major])
     # Cross-sectional relative-strength ranking, then return only the best 5 swing candidates.
