@@ -95,7 +95,15 @@ def discover_candidates(symbols, limit=100):
                 close=g.Close; vol=g.Volume; p=float(close.iloc[-1]); av=float(vol.tail(20).mean()); dollar=p*av
                 e8=float(close.ewm(span=8,adjust=False).mean().iloc[-1]); e21=float(close.ewm(span=21,adjust=False).mean().iloc[-1]); e50=float(close.ewm(span=50,adjust=False).mean().iloc[-1])
                 adr=float((((g.High-g.Low)/close)*100).tail(20).mean()); momentum=(p/e21-1) if e21 else 0
-                if p>=3 and av>=500000 and dollar>=15000000 and adr>=2 and p>e8>e21>e50: keep.append((t,momentum,adr,dollar))
+                if p>=3 and av>=500000 and dollar>=15000000 and adr>=2 and p>e8>e21>e50:
+                    # Market-cap is checked only after the inexpensive price/liquidity/trend filters.
+                    # If Yahoo cannot return it, reject the symbol rather than pretending it passed.
+                    try:
+                        cap=float(yf.Ticker(t).fast_info.get("market_cap") or 0)
+                    except Exception:
+                        cap=0
+                    if cap>=300_000_000:
+                        keep.append((t,momentum,adr,dollar))
             except Exception: pass
     keep.sort(key=lambda z:(z[1],z[2],z[3]),reverse=True)
     return [x[0] for x in keep[:limit]]
@@ -230,16 +238,55 @@ def quality_setup(t,g,spy_g,market):
     return {"ticker":t,"price":num(p),"setup":setup,"status":state,"entry":num(entry),"stop":num(stop),"t1":num(entry+risk),"t2":num(entry+2*risk),"risk_share":num(risk),"rvol":num(rv),"chart":chart,"quality_score":score,"grade":grade,"quality_state":state,"phase":phase,"session_score":score,"session_state":state,"session_checks":checks,"relative_strength":round(rs,2),"stock_session_return":round(stock_ret,2),"spy_session_return":round(spy_ret,2),"vwap":num(vwap),"vwap_rising":vwap_rising,"ema_rising":ema_rising,"market_aligned":market_ok,"extension_pct":round(extension,2),"no_chase":no_chase,"premarket_high":num(pre_high),"premarket_low":num(pre_low),"shares":shares,"planned_risk":round(shares*risk,2),"t1_1r":num(entry+risk),"t2_2r":num(entry+2*risk)}
 
 def swing_setup(t,g):
+    """Momentum swing setup: EMA stack + tight base/volume contraction + breakout or U&R."""
     g=ind(g)
-    if len(g)<21:return
-    r=g.iloc[-1];p=float(r.Close);trend=p>r.e8>r.e21;full=trend and r.e21>r.e50
-    av=g.Volume.rolling(20).mean();rv=float(r.Volume/av.iloc[-1]) if pd.notna(av.iloc[-1]) and av.iloc[-1]>0 else 0
-    ph=float(g.High.shift(1).rolling(20).max().iloc[-1]);lo=float(g.Low.tail(10).min());near=p>=ph*.985
-    score=(35 if full else 20 if trend else 0)+(25 if rv>=1.5 else 12 if rv>=1 else 0)+(25 if near else 0)+15
-    status="CONFIRMED" if p>ph and rv>=1.5 and trend else ("READY" if trend and near else "WATCH")
-    entry=ph;stop=max(lo,entry*.96);risk=max(.01,entry-stop)
-    chart=[{"time":str(i),"open":num(x.Open),"high":num(x.High),"low":num(x.Low),"close":num(x.Close)} for i,x in g.tail(50).iterrows()]
-    return {"ticker":t,"price":num(p),"score":min(100,int(score)),"rvol":num(rv),"setup":"EMA trend / 20-bar breakout","status":status,"entry":num(entry),"stop":num(stop),"t1":num(entry+2*risk),"t2":num(entry+3*risk),"risk_share":num(risk),"chart":chart}
+    if len(g)<55:return
+    r=g.iloc[-1]; p=float(r.Close)
+    av20=float(g.Volume.tail(20).mean())
+    adr=float((((g.High-g.Low)/g.Close)*100).tail(20).mean())
+    full=bool(p>r.e8>r.e21>r.e50)
+    liquid=bool(p>=3 and av20>=500000 and p*av20>=15000000 and adr>=2)
+    if not (full and liquid): return
+
+    base=g.iloc[-11:-1].copy()
+    base_high=float(base.High.max()); base_low=float(base.Low.min())
+    base_mid=max(.01,(base_high+base_low)/2)
+    base_width=(base_high-base_low)/base_mid*100
+    atr20=float((g.High-g.Low).tail(20).mean())
+    tight=base_width<=max(8.0,(atr20/p*100)*4.0)
+
+    recent_vol=float(g.Volume.iloc[-6:-1].mean())
+    prior_vol=float(g.Volume.iloc[-21:-6].mean())
+    contraction=bool(prior_vol>0 and recent_vol<=prior_vol*.85)
+    rvol=float(r.Volume/av20) if av20>0 else 0
+
+    # Relative strength proxy: 20-day return. Cross-sectional ranking is applied later.
+    ret20=(p/float(g.Close.iloc[-21])-1)*100
+    breakout=bool(p>base_high and rvol>=1.5)
+    near=bool(p>=base_high*.985 and p<=base_high*1.01)
+
+    # Undercut-and-rally: recent low undercuts the prior 10-day low, then closes back above it.
+    prior_low=float(g.Low.iloc[-21:-11].min())
+    recent_low=float(g.Low.iloc[-5:].min())
+    ur=bool(recent_low<prior_low and p>prior_low)
+    ur_entry=prior_low
+    setup="Undercut & Rally" if ur else "Tight Base Breakout"
+    entry=ur_entry if ur else base_high
+    stop=float(recent_low*.995) if ur else max(base_low,entry*.96)
+    risk=max(.01,entry-stop)
+
+    score=45
+    score += 15 if tight else 0
+    score += 10 if contraction else 0
+    score += 10 if near or ur else 0
+    score += 10 if rvol>=1.5 else (5 if rvol>=1 else 0)
+    score += 10 if ret20>0 else 0
+    status="READY" if ((breakout or ur) and rvol>=1.5) else ("WAITING FOR BREAKOUT" if (near or ur or tight) else "NO TRADE")
+    chart=[{"time":str(i),"open":num(x.Open),"high":num(x.High),"low":num(x.Low),"close":num(x.Close)} for i,x in g.tail(60).iterrows()]
+    return {"ticker":t,"price":num(p),"score":min(100,int(score)),"rvol":num(rvol),"adr":num(adr),
+            "setup":setup,"timeframe":"Daily","status":status,"entry":num(entry),"stop":num(stop),
+            "t1":num(entry+2*risk),"t2":num(entry+3*risk),"risk_share":num(risk),
+            "tight_base":tight,"volume_contraction":contraction,"ret20":round(ret20,2),"chart":chart}
 
 def regime(d):
     vals={};bull=0
@@ -292,12 +339,13 @@ def swing_sector_strength():
 
 def main():
     global U
-    # Fast dashboard refresh: do not enumerate the full U.S. market here.
-    # Broad discovery belongs in a separate, less-frequent process.
+    # Apply the real momentum/liquidity filters to the configured U.S. universe.
     major=load_major_index_members()
     fallback=[x.strip().upper() for x in UNIVERSE_FILE.read_text().splitlines() if x.strip() and not x.startswith("#")]
     broad=list(dict.fromkeys(fallback))
-    candidates=broad[:40]
+    candidates=discover_candidates(broad,limit=100)
+    # Keep major-index leaders in the analysis set even when they are not in universe.txt;
+    # swing_setup still rejects names that do not meet the requested rules.
     major_candidates=list(major)
     U=["SPY","QQQ"]+list(dict.fromkeys([x for x in major_candidates if x not in ("SPY","QQQ")]+[x for x in candidates if x not in ("SPY","QQQ")]))
     print("fast dashboard snapshot:",len(candidates),"fallback +",len(major_candidates),"major candidates")
@@ -325,7 +373,16 @@ def main():
             if x:swing.append(x)
         except Exception as e:print("swing",t,e)
     day,day_major_count=pick_40(day,major)
-    swing,swing_major_count=pick_40(swing,major)
+    # Cross-sectional relative-strength ranking, then return only the best 5 swing candidates.
+    swing=sorted(swing,key=lambda x:(x.get("ret20",-999),x.get("score",0),x.get("rvol") or 0),reverse=True)
+    rs_cut=max(1,int(len(swing)*.35)) if swing else 0
+    leaders={x["ticker"] for x in swing[:rs_cut]}
+    for x in swing:
+        x["relative_strength"]="LEADER" if x["ticker"] in leaders else "AVERAGE"
+        if x["ticker"] in leaders: x["score"]=min(100,x.get("score",0)+5)
+    swing=[x for x in swing if x.get("relative_strength")=="LEADER" and x.get("status")!="NO TRADE"]
+    swing=sorted(swing,key=lambda x:(x.get("score",0),x.get("rvol") or 0),reverse=True)[:5]
+    swing_major_count=len([x for x in swing if x.get("ticker") in major])
     m=regime(d)
     print("STEP sectors",flush=True)
     sectors=sector_strength()
@@ -346,7 +403,7 @@ def main():
     except Exception as e:
         print("spy agents",e); spy_ai={"error":str(e)[:180],"market_data_status":"UNAVAILABLE"}
     print("STEP spy agents done",flush=True)
-    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"scan_mode":"FAST SNAPSHOT","day_displayed":len(day),"swing_displayed":len(swing),"day_major_index":day_major_count,"swing_major_index":swing_major_count,"target_major_index":30,"dynamic":True,"data_session":str(spy_session) if spy_session else None,"stale_rejected":len(rejected_stale),"price_mode":"RAW / UNADJUSTED"},"market":m,"sectors":sectors,"swing_sectors":swing_sectors,"day":day,"swing":swing,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
+    snap={"generated_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),"spy_ai":spy_ai,"scanner":{"listed_symbols":len(broad),"passed_filters":len(candidates),"intraday_scanned":max(0,len(U)-2),"scan_mode":"FILTERED SNAPSHOT","day_displayed":len(day),"swing_displayed":len(swing),"day_major_index":day_major_count,"swing_major_index":swing_major_count,"target_major_index":30,"dynamic":True,"data_session":str(spy_session) if spy_session else None,"stale_rejected":len(rejected_stale),"price_mode":"RAW / UNADJUSTED"},"market":m,"sectors":sectors,"swing_sectors":swing_sectors,"day":day,"swing":swing,"news":news_items,"analytics":{"bullish_count":sum(x["status"]!="WATCH" for x in swing),"bearish_count":sum(x["status"]=="WATCH" for x in swing),"day_confirmed":sum(x["status"]=="CONFIRMED" for x in day),"swing_ready":sum(x["status"] in ("READY","CONFIRMED") for x in swing)}}
     OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(snap,separators=(",",":")))
     # Paper journal: open a simulated trade on a new CONFIRMED day signal and track stop/T1/T2.
     try: journal=json.loads(JOURNAL.read_text()) if JOURNAL.exists() else []
