@@ -16,7 +16,9 @@ on:
     - cron: "0,5,10,15,20,25,30,35,40,45,50,55 13-20 * * 1-5"
 concurrency:
   group: tradepilot-refresh
-  cancel-in-progress: true
+  # A scheduled run should not cancel a just-started push refresh and leave the
+  # dashboard stuck on the previous snapshot.
+  cancel-in-progress: false
 permissions:
   contents: write
 jobs:
