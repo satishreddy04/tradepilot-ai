@@ -37,11 +37,14 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+      # Build Advanced from the exact snapshot generated above so the two tabs
+      # can never get out of sync because of independent schedules.
+      - run: python advanced_worker.py
       # Backtesting is intentionally separate from the frequent dashboard refresh.
       - run: |
           git config user.name tradepilot-bot
           git config user.email tradepilot-bot@users.noreply.github.com
-          git add docs/data/snapshot.json docs/data/state.json docs/data/journal.json docs/data/signals.json
+          git add docs/data/snapshot.json docs/data/state.json docs/data/journal.json docs/data/signals.json docs/data/advanced.json
           git diff --cached --quiet || git commit -m 'data: refresh snapshot and backtest'
           # A code/UI push can land while this scanner run is executing.
           # Rebase the generated-data commit onto the latest main before pushing.
@@ -59,6 +62,7 @@ jobs:
           cp docs/data/state.json /tmp/tradepilot-data/state.json
           cp docs/data/journal.json /tmp/tradepilot-data/journal.json
           cp docs/data/signals.json /tmp/tradepilot-data/signals.json
+          cp docs/data/advanced.json /tmp/tradepilot-data/advanced.json
           git reset --hard origin/main
           cp /tmp/tradepilot-data/*.json docs/data/
           git add docs/data/snapshot.json docs/data/state.json docs/data/journal.json docs/data/signals.json
