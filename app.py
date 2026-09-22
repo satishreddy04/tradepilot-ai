@@ -6,8 +6,11 @@ import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
 import requests
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="TradePilot AI",page_icon="📈",layout="wide")
+# Automatically rerun the dashboard every 5 minutes to pick up the latest GitHub snapshot.
+st_autorefresh(interval=5*60*1000, key="tradepilot_5min_refresh")
 st.markdown("""<style>
 .stApp{background:#07111f;color:#e8eef7}.block-container{padding-top:1rem;max-width:1500px}
 [data-testid="stMetric"]{background:#0d1b2d;border:1px solid #20324a;padding:12px;border-radius:14px;min-height:96px}
