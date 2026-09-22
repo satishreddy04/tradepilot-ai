@@ -8,8 +8,8 @@ on:
       - "worker.py"
       - "requirements.txt"
       - ".github/workflows/advanced.yml"
-  schedule:
-    - cron: "0,10,20,30,40,50 11-20 * * 1-5"
+  # Scheduled Advanced generation is owned by refresh.yml so it always uses
+  # the exact freshly-generated core snapshot.
 concurrency:
   group: tradepilot-advanced
   cancel-in-progress: true
