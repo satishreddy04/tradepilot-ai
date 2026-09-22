@@ -3,7 +3,7 @@ from datetime import datetime,timezone
 from pathlib import Path
 import pandas as pd
 import yfinance as yf
-from worker import quality_setup,regime
+from worker import quality_setup
 
 SNAP=Path("docs/data/snapshot.json")
 OUT=Path("docs/data/advanced.json")
@@ -25,9 +25,14 @@ def main():
         return
     syms=["SPY","QQQ"]+symbols
     print("ADV download",len(syms),flush=True)
-    x=yf.download(syms,period="2d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=True,threads=False,progress=False,timeout=8)
-    d=yf.download(["SPY","QQQ"],period="3mo",interval="1d",group_by="ticker",auto_adjust=False,actions=False,threads=False,progress=False,timeout=8)
-    m=regime(d)
+    # Advanced must be fast enough for intraday use. One threaded intraday request
+    # is sufficient; reuse the market regime already computed by worker.py.
+    x=yf.download(syms,period="2d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=True,threads=True,progress=False,timeout=12)
+    market=snap.get("market",{})
+    m={"label":market.get("label","NEUTRAL / MIXED"),
+       "score":market.get("score",50),
+       "breadth":market.get("breadth",50),
+       "spy":market.get("spy",{}),"qqq":market.get("qqq",{})}
     quality=[]
     for t in symbols:
         try:
