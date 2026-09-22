@@ -28,12 +28,13 @@ def pick_40(rows,major):
     chosen=sorted(chosen[:50],key=lambda x:(x.get("score",0),x.get("rvol") or 0),reverse=True)
     return chosen,len([x for x in chosen if x.get("ticker") in major])
 
-def sector_strength():
+def sector_strength(z=None):
     """Rank sectors for day trading from the latest available regular session."""
     out=[]
     try:
         syms=list(SECTOR_ETFS.values())+["SPY"]
-        z=yf.download(syms,period="5d",interval="15m",group_by="ticker",auto_adjust=False,actions=False,prepost=False,threads=True,progress=False,timeout=10)
+        if z is None:
+            z=yf.download(syms,period="2d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=False,threads=True,progress=False,timeout=10)
         def bars(sym):
             try:
                 g=z[sym].dropna(how="all")
@@ -323,7 +324,7 @@ def regime(d):
 
 def news():
     out=[]
-    for t in ["SPY","QQQ","NVDA","AMD","TSLA","META","AMZN"]:
+    for t in ["SPY","QQQ","NVDA"]:
         try:
             for n in (yf.Ticker(t).news or [])[:2]:
                 x=n.get("content",n);title=x.get("title") or n.get("title");link=(x.get("canonicalUrl") or {}).get("url") or n.get("link")
@@ -331,12 +332,13 @@ def news():
         except:pass
     return out[:20]
 
-def swing_sector_strength():
+def swing_sector_strength(z=None):
     """Rank sectors for swing trading using 1d/5d/20d momentum, SPY-relative strength and EMA trend."""
     out=[]
     try:
         syms=list(SECTOR_ETFS.values())+["SPY"]
-        z=yf.download(syms,period="3mo",interval="1d",group_by="ticker",auto_adjust=False,actions=False,threads=True,progress=False,timeout=20)
+        if z is None:
+            z=yf.download(syms,period="3mo",interval="1d",group_by="ticker",auto_adjust=False,actions=False,threads=True,progress=False,timeout=20)
         spy=z["SPY"].dropna()
         spy20=(float(spy.Close.iloc[-1])/float(spy.Close.iloc[-21])-1)*100 if len(spy)>=21 else 0
         for name,t in SECTOR_ETFS.items():
@@ -370,13 +372,15 @@ def main():
     # is not treated as a failed technical setup.
     major_candidates=list(major)
     U=["SPY","QQQ"]+list(dict.fromkeys([x for x in major_candidates if x not in ("SPY","QQQ")]+[x for x in candidates if x not in ("SPY","QQQ")]))
+    # Include sector ETFs in the same bulk downloads; avoids another intraday network request.
+    download_symbols=list(dict.fromkeys(U+list(SECTOR_ETFS.values())))
     print("fast dashboard snapshot:",len(candidates),"fallback +",len(major_candidates),"major candidates")
     print("STEP daily download",flush=True)
-    d=yf.download(U,period="4mo",interval="1d",group_by="ticker",auto_adjust=False,actions=False,threads=True,progress=False,timeout=20)
+    d=yf.download(download_symbols,period="3mo",interval="1d",group_by="ticker",auto_adjust=False,actions=False,threads=True,progress=False,timeout=20)
     print("STEP daily done",flush=True)
     # prepost=False prevents extended-hours prints from contaminating ORB/VWAP/RVOL.
     print("STEP intraday download",flush=True)
-    i=yf.download(U,period="5d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=False,threads=True,progress=False,timeout=20)
+    i=yf.download(download_symbols,period="2d",interval="5m",group_by="ticker",auto_adjust=False,actions=False,prepost=False,threads=True,progress=False,timeout=20)
     print("STEP intraday done",flush=True)
     day=[];swing=[];quality=[]
     # Data-integrity guard: all symbols must come from the same latest regular session.
@@ -447,9 +451,9 @@ def main():
     swing_major_count=len([x for x in swing if x.get("ticker") in major])
     m=regime(d)
     print("STEP sectors",flush=True)
-    sectors=sector_strength()
+    sectors=sector_strength(i)
     print("STEP sectors done",len(sectors),flush=True)
-    swing_sectors=swing_sector_strength()
+    swing_sectors=swing_sector_strength(d)
     print("STEP swing sectors done",len(swing_sectors),flush=True)
     print("STEP news",flush=True)
     news_items=news()
